@@ -1,0 +1,26 @@
+{
+  "name": "head-tracked-webgl-space",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "assets:sync": "node ./scripts/sync-mediapipe-assets.mjs",
+    "dev": "vite --host 127.0.0.1 --port 4173 --strictPort",
+    "build": "tsc --noEmit && vite build",
+    "postinstall": "npm run assets:sync",
+    "preview": "vite preview --host 127.0.0.1 --port 4174 --strictPort",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "check": "npm run test && npm run build"
+  },
+  "dependencies": {
+    "@mediapipe/tasks-vision": "^0.10.22",
+    "three": "^0.180.0"
+  },
+  "devDependencies": {
+    "@types/three": "^0.183.1",
+    "typescript": "^5.9.3",
+    "vite": "^7.1.12",
+    "vitest": "^3.2.4"
+  }
+}
