@@ -1,7 +1,7 @@
-# XR Fashion Final - Christine Lai
+# XR Fashion Final - Christine Lai and Yufei Huang
 # Maison Margela
 
-Minimal WebGL MVP that renders a 3D scene with `Three.js` and shifts the camera based on webcam-tracked head movement from MediaPipe Face Landmarker.
+A Maison Margiela Web experience that renders a 3D scene with `Three.js` and shifts the camera based on webcam-tracked head movement from MediaPipe Face Landmarker.
 
 ## Requirements
 
