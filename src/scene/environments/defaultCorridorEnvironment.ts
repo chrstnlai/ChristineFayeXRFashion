@@ -22,7 +22,6 @@ export function createDefaultCorridorEnvironment(): SceneEnvironment {
 
   root.add(createTunnelRibs());
   root.add(createTunnelRails());
-  root.add(createStarField());
   root.add(driftingObjects);
 
   buildWorldObjects(driftingObjects, driftingBases);
@@ -64,7 +63,7 @@ function buildWorldObjects(group: Group, bases: Vector3[]): void {
   const wideShardGeometry = new BoxGeometry(0.8, 2.3, 0.8);
 
   const cyanMaterial = new MeshPhysicalMaterial({
-    color: "#88ecff",
+    color: "#ffffff",
     emissive: "#0b2b52",
     emissiveIntensity: 0.8,
     metalness: 0.2,
@@ -73,32 +72,32 @@ function buildWorldObjects(group: Group, bases: Vector3[]): void {
   });
 
   const amberMaterial = new MeshPhysicalMaterial({
-    color: "#ffbe71",
+    color: "#ffffff",
     emissive: "#4a1f00",
     emissiveIntensity: 0.7,
     metalness: 0.12,
     roughness: 0.24,
   });
 
-  const placements = [
-    { geometry: shardGeometry, material: cyanMaterial, position: new Vector3(-3.2, 1.8, -4) },
-    { geometry: shardGeometry, material: amberMaterial, position: new Vector3(3.4, -1.5, -6.5) },
-    { geometry: wideShardGeometry, material: cyanMaterial, position: new Vector3(-4.2, -0.6, -10) },
-    { geometry: shardGeometry, material: amberMaterial, position: new Vector3(4, 1.7, -13) },
-    { geometry: shardGeometry, material: cyanMaterial, position: new Vector3(-3.6, 1.2, -17) },
-    { geometry: wideShardGeometry, material: amberMaterial, position: new Vector3(3.2, -1.8, -21) },
-    { geometry: shardGeometry, material: cyanMaterial, position: new Vector3(-4.4, -1.1, -25) },
-    { geometry: shardGeometry, material: amberMaterial, position: new Vector3(4.5, 1.5, -29) },
-  ];
+  // const placements = [
+  //   { geometry: shardGeometry, material: cyanMaterial, position: new Vector3(-3.2, 1.8, -4) },
+  //   { geometry: shardGeometry, material: amberMaterial, position: new Vector3(3.4, -1.5, -6.5) },
+  //   { geometry: wideShardGeometry, material: cyanMaterial, position: new Vector3(-4.2, -0.6, -10) },
+  //   { geometry: shardGeometry, material: amberMaterial, position: new Vector3(4, 1.7, -13) },
+  //   { geometry: shardGeometry, material: cyanMaterial, position: new Vector3(-3.6, 1.2, -17) },
+  //   { geometry: wideShardGeometry, material: amberMaterial, position: new Vector3(3.2, -1.8, -21) },
+  //   { geometry: shardGeometry, material: cyanMaterial, position: new Vector3(-4.4, -1.1, -25) },
+  //   { geometry: shardGeometry, material: amberMaterial, position: new Vector3(4.5, 1.5, -29) },
+  // ];
 
-  for (const placement of placements) {
-    const mesh = new Mesh(placement.geometry, placement.material);
-    mesh.position.copy(placement.position);
-    mesh.rotation.z = (Math.random() - 0.5) * 0.6;
-    mesh.rotation.x = (Math.random() - 0.5) * 0.2;
-    group.add(mesh);
-    bases.push(placement.position.clone());
-  }
+  // for (const placement of placements) {
+  //   const mesh = new Mesh(placement.geometry, placement.material);
+  //   mesh.position.copy(placement.position);
+  //   mesh.rotation.z = (Math.random() - 0.5) * 0.6;
+  //   mesh.rotation.x = (Math.random() - 0.5) * 0.2;
+  //   group.add(mesh);
+  //   bases.push(placement.position.clone());
+  // }
 }
 
 function createTunnelRibs(): LineSegments {
@@ -129,7 +128,7 @@ function createTunnelRibs(): LineSegments {
   return new LineSegments(
     geometry,
     new LineBasicMaterial({
-      color: "#1e5b98",
+      color: "#ffffff",
       transparent: true,
       opacity: 0.55,
     }),
