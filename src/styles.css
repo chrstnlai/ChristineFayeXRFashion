@@ -94,7 +94,7 @@ button {
   padding: 0.85rem 1.15rem;
   border: 0;
   border-radius: 999px;
-  background: linear-gradient(135deg, #a5efff, #5f99ff);
+  background: white;
   color: #04101c;
   font-weight: 700;
   cursor: pointer;

@@ -55,7 +55,7 @@ export class HeadTrackedSpaceApp {
     eyebrow.textContent = "Head Tracked WebGL";
 
     const title = document.createElement("h1");
-    title.textContent = "Step into the scene.";
+    title.textContent = "MAISON MARGIELA";
 
     const description = document.createElement("p");
     description.className = "intro-copy";
@@ -77,7 +77,6 @@ export class HeadTrackedSpaceApp {
     });
 
     this.overlayStatus.className = "intro-status";
-    this.overlayStatus.textContent = "Camera access has not started yet.";
 
     panel.append(eyebrow, title, description, this.startButton, this.overlayStatus);
     this.overlay.append(panel);
