@@ -52,15 +52,13 @@ export class HeadTrackedSpaceApp {
 
     const eyebrow = document.createElement("p");
     eyebrow.className = "intro-eyebrow";
-    eyebrow.textContent = "Head Tracked WebGL";
 
     const title = document.createElement("h1");
     title.textContent = "MAISON MARGIELA";
 
     const description = document.createElement("p");
     description.className = "intro-copy";
-    description.textContent =
-      "Start the camera, hold still for a brief calibration, and then look left, right, up, and down to explore the world in first person.";
+    
 
     this.startButton.type = "button";
     this.startButton.className = "start-button";
