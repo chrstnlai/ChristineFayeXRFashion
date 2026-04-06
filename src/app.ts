@@ -77,6 +77,7 @@ export class HeadTrackedSpaceApp {
     });
 
     this.overlayStatus.className = "intro-status";
+    //hello
 
     panel.append(eyebrow, title, description, this.startButton, this.overlayStatus);
     this.overlay.append(panel);
