@@ -13,11 +13,16 @@ import {
 
 import type { CameraOffset } from "../types";
 import type { SceneEnvironmentFactory } from "./environment";
-import { createDefaultCorridorEnvironment } from "./environments/defaultCorridorEnvironment";
+import { createCameraFramePlaceholder } from "./cameraFramePlaceholder";
+import { createGltfEnvironment } from "./environments/gltfEnvironment";
+
+type SceneVideoFeed = {
+  video: HTMLVideoElement;
+};
 
 type SceneController = {
   mount(): void;
-  render(frameMs: number, offset: CameraOffset): void;
+  render(frameMs: number, offset: CameraOffset, videoFeed?: SceneVideoFeed): void;
   hasReachedEnd(): boolean;
   resetProgress(): void;
   dispose(): void;
@@ -25,12 +30,17 @@ type SceneController = {
 
 type SceneControllerOptions = {
   environmentFactory?: SceneEnvironmentFactory;
+  /** Webcam element for the opening live-feed quad */
+  faceVideo?: HTMLVideoElement;
 };
 
-const CAMERA_BASE_POSITION = new Vector3(0, 0.25, 2.2);
+const CAMERA_BASE_POSITION = new Vector3(1, 1.28, 25);
 const LOOK_DISTANCE = 12;
 const JOURNEY_END_Z = -28;
 const JOURNEY_SPEED = 0.55;
+const BASE_PITCH = -0.08;
+const BASE_YAW = 0.16;
+const CAMERA_FRAME_OFFSET_Z = 4.75;
 
 export function createSceneController(
   host: HTMLDivElement,
@@ -39,7 +49,7 @@ export function createSceneController(
   const scene = new Scene();
   scene.background = new Color("#03060d");
 
-  const camera = new PerspectiveCamera(62, 1, 0.1, 120);
+  const camera = new PerspectiveCamera(72, 1, 0.1, 140);
   camera.position.copy(CAMERA_BASE_POSITION);
 
   const renderer = new WebGLRenderer({ antialias: true, alpha: false });
@@ -47,7 +57,10 @@ export function createSceneController(
   renderer.outputColorSpace = SRGBColorSpace;
 
   const clock = new Clock();
-  const environment = (options.environmentFactory ?? createDefaultCorridorEnvironment)();
+  const environment = (
+    options.environmentFactory ??
+    (() => createGltfEnvironment({ url: "/models/EXPORT.glb" }))
+  )();
   const lookDirection = new Vector3();
   const lookTarget = new Vector3();
   let currentCameraZ = CAMERA_BASE_POSITION.z;
@@ -56,6 +69,19 @@ export function createSceneController(
   buildLights(scene);
   scene.add(environment.root);
 
+  const cameraFrame = createCameraFramePlaceholder({
+    center: new Vector3(
+      CAMERA_BASE_POSITION.x - 0.28,
+      CAMERA_BASE_POSITION.y + 0.1,
+      CAMERA_BASE_POSITION.z - CAMERA_FRAME_OFFSET_Z,
+    ),
+    rotationY: BASE_YAW,
+    width: 0.25,
+    height: 0.3,
+    video: options.faceVideo,
+  });
+  scene.add(cameraFrame.root);
+
   function mount(): void {
     renderer.domElement.className = "scene-canvas";
     host.replaceChildren(renderer.domElement);
@@ -63,7 +89,7 @@ export function createSceneController(
     window.addEventListener("resize", resize);
   }
 
-  function render(_frameMs: number, offset: CameraOffset): void {
+  function render(_frameMs: number, offset: CameraOffset, videoFeed?: SceneVideoFeed): void {
     const deltaSeconds = clock.getDelta();
     const elapsed = clock.elapsedTime;
     environment.update(elapsed);
@@ -73,8 +99,8 @@ export function createSceneController(
       hasReachedEnd = currentCameraZ <= JOURNEY_END_Z;
     }
 
-    const yaw = -offset.x * 0.28;
-    const pitch = MathUtils.clamp(-offset.y * 0.16, -0.36, 0.36);
+    const yaw = BASE_YAW + -offset.x * 0.28;
+    const pitch = MathUtils.clamp(BASE_PITCH - offset.y * 0.16, -0.36, 0.36);
 
     lookDirection.set(
       Math.sin(yaw) * Math.cos(pitch),
@@ -85,6 +111,11 @@ export function createSceneController(
     camera.position.set(CAMERA_BASE_POSITION.x, CAMERA_BASE_POSITION.y, currentCameraZ);
     lookTarget.copy(camera.position).addScaledVector(lookDirection, LOOK_DISTANCE);
     camera.lookAt(lookTarget);
+
+    cameraFrame.update(elapsed, {
+      video: videoFeed?.video,
+      cameraWorldPosition: camera.position,
+    });
 
     renderer.render(scene, camera);
   }
@@ -100,6 +131,7 @@ export function createSceneController(
 
   function dispose(): void {
     window.removeEventListener("resize", resize);
+    cameraFrame.dispose();
     environment.dispose();
     renderer.dispose();
   }

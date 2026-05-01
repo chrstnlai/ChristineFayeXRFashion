@@ -18,10 +18,16 @@ export class HeadTrackedSpaceApp {
   private readonly statusPill = document.createElement("div");
   private readonly startButton = document.createElement("button");
   private readonly resetButton = document.createElement("button");
+  private readonly introVideoWrap = document.createElement("div");
+  private readonly introVideoScrim = document.createElement("div");
+  private readonly introTitleArt = document.createElement("img");
+  private readonly introBgVideo = document.createElement("video");
+  private readonly bgMusic = new Audio();
+  private readonly musicMuteButton = document.createElement("button");
   private readonly video = document.createElement("video");
   private readonly tracker = new FaceTracker();
   private readonly calibrator = new HeadPoseCalibrator(CALIBRATION_SAMPLE_COUNT);
-  private readonly scene = createSceneController(this.sceneHost);
+  private readonly scene = createSceneController(this.sceneHost, { faceVideo: this.video });
 
   private stream: MediaStream | null = null;
   private animationFrameId = 0;
@@ -47,22 +53,43 @@ export class HeadTrackedSpaceApp {
     this.video.setAttribute("playsinline", "true");
 
     this.overlay.className = "intro-overlay";
+
+    this.introVideoWrap.className = "intro-video-wrap";
+    this.introBgVideo.className = "intro-bg-video";
+    this.introBgVideo.src = "/mmvideo.mp4";
+    this.introBgVideo.muted = true;
+    this.introBgVideo.loop = true;
+    this.introBgVideo.playsInline = true;
+    this.introBgVideo.autoplay = true;
+    this.introBgVideo.setAttribute("playsinline", "true");
+    this.introBgVideo.preload = "auto";
+
+    this.bgMusic.src = "/justfornow.mp3";
+    this.bgMusic.loop = true;
+    this.bgMusic.preload = "auto";
+
+    this.musicMuteButton.type = "button";
+    this.musicMuteButton.className = "music-mute-button";
+    this.musicMuteButton.setAttribute("aria-label", "Mute background music");
+    this.musicMuteButton.addEventListener("click", () => {
+      this.toggleMusicMute();
+    });
+    this.updateMusicMuteButtonLabel();
+
+    this.introVideoScrim.className = "intro-video-scrim";
+    this.introTitleArt.className = "intro-title-art";
+    this.introTitleArt.src = encodeURI("/de-constructed self.png");
+    this.introTitleArt.alt = "";
+    this.introTitleArt.decoding = "async";
+
+    this.introVideoWrap.append(this.introBgVideo, this.introVideoScrim, this.introTitleArt);
+
     const panel = document.createElement("div");
     panel.className = "intro-panel";
 
-    const eyebrow = document.createElement("p");
-    eyebrow.className = "intro-eyebrow";
-
-    const title = document.createElement("h1");
-    title.textContent = "MAISON MARGIELA";
-
-    const description = document.createElement("p");
-    description.className = "intro-copy";
-    
-
     this.startButton.type = "button";
     this.startButton.className = "start-button";
-    this.startButton.textContent = "Start Camera";
+    this.startButton.textContent = "START EXPERIENCE";
     this.startButton.addEventListener("click", () => {
       void this.handleStart();
     });
@@ -77,13 +104,20 @@ export class HeadTrackedSpaceApp {
     this.overlayStatus.className = "intro-status";
     //hello
 
-    panel.append(eyebrow, title, description, this.startButton, this.overlayStatus);
-    this.overlay.append(panel);
+    panel.append(this.startButton, this.overlayStatus);
+    this.overlay.append(this.introVideoWrap, panel);
 
     this.statusPill.className = "status-pill";
     this.statusPill.textContent = "Loading tracker...";
 
-    this.shell.append(this.sceneHost, this.overlay, this.statusPill, this.resetButton, this.video);
+    this.shell.append(
+      this.sceneHost,
+      this.overlay,
+      this.statusPill,
+      this.resetButton,
+      this.musicMuteButton,
+      this.video,
+    );
   }
 
   async mount(): Promise<void> {
@@ -94,6 +128,8 @@ export class HeadTrackedSpaceApp {
     }
 
     this.scene.mount();
+    void this.introBgVideo.play().catch(() => {});
+    this.ensureBgMusicPlaying();
     this.beginTrackerWarmup();
     this.setPillStatus("Preparing head tracking...", true);
     window.addEventListener("beforeunload", () => {
@@ -106,6 +142,7 @@ export class HeadTrackedSpaceApp {
       return;
     }
 
+    this.ensureBgMusicPlaying();
     this.isStarted = true;
     this.startButton.disabled = true;
     this.overlayStatus.textContent = "Requesting camera access...";
@@ -116,6 +153,7 @@ export class HeadTrackedSpaceApp {
       this.animationFrameId = requestAnimationFrame(this.onFrame);
       this.startVideoTrackingLoop();
       this.shell.classList.add("experience-live");
+      this.video.classList.add("is-scene-mirror-source");
 
       if (this.trackerStatus === "ready") {
         this.beginCalibration();
@@ -128,6 +166,7 @@ export class HeadTrackedSpaceApp {
       void this.beginTrackerWarmup();
     } catch (error) {
       this.isStarted = false;
+      this.video.classList.remove("is-scene-mirror-source");
       this.startButton.disabled = false;
       this.overlayStatus.textContent =
         error instanceof Error ? error.message : "Unable to start the camera.";
@@ -147,7 +186,11 @@ export class HeadTrackedSpaceApp {
     const targetOffset = poseToCameraOffset(calibratedPose);
     this.smoothedOffset = smoothOffset(this.smoothedOffset, targetOffset, deltaSeconds);
 
-    this.scene.render(frameMs, this.smoothedOffset);
+    this.scene.render(
+      frameMs,
+      this.smoothedOffset,
+      this.isStarted ? { video: this.video } : undefined,
+    );
     this.updateRuntimeStatus(calibratedPose);
     this.resetButton.classList.toggle("is-hidden", !this.scene.hasReachedEnd());
 
@@ -274,10 +317,37 @@ export class HeadTrackedSpaceApp {
     this.scene.dispose();
     this.tracker.dispose();
 
+    this.video.classList.remove("is-scene-mirror-source");
+
     if (this.stream) {
       stopCamera(this.stream);
       this.stream = null;
     }
+
+    this.introBgVideo.pause();
+    this.introBgVideo.removeAttribute("src");
+    this.introBgVideo.load();
+    this.introTitleArt.removeAttribute("src");
+
+    this.bgMusic.pause();
+    this.bgMusic.removeAttribute("src");
+    this.bgMusic.load();
+  }
+
+  private ensureBgMusicPlaying(): void {
+    void this.bgMusic.play().catch(() => {});
+  }
+
+  private toggleMusicMute(): void {
+    this.bgMusic.muted = !this.bgMusic.muted;
+    this.updateMusicMuteButtonLabel();
+  }
+
+  private updateMusicMuteButtonLabel(): void {
+    const muted = this.bgMusic.muted;
+    this.musicMuteButton.textContent = muted ? "Unmute music" : "Mute music";
+    this.musicMuteButton.setAttribute("aria-label", muted ? "Unmute background music" : "Mute background music");
+    this.musicMuteButton.setAttribute("aria-pressed", muted ? "true" : "false");
   }
 
   private supportsVideoFrameCallback(): boolean {
