@@ -9,6 +9,10 @@ import type { CameraOffset, NormalizedHeadPose } from "./types";
 
 const CALIBRATION_SAMPLE_COUNT = 18;
 
+const MUSIC_ICON_UNMUTED = `<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>`;
+
+const MUSIC_ICON_MUTED = `<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>`;
+
 export class HeadTrackedSpaceApp {
   private readonly root: HTMLDivElement;
   private readonly shell = document.createElement("div");
@@ -22,7 +26,7 @@ export class HeadTrackedSpaceApp {
   private readonly introVideoScrim = document.createElement("div");
   private readonly introTitleArt = document.createElement("img");
   private readonly introBgVideo = document.createElement("video");
-  private readonly bgMusic = new Audio();
+  private readonly bgMusic = document.createElement("audio");
   private readonly musicMuteButton = document.createElement("button");
   private readonly video = document.createElement("video");
   private readonly tracker = new FaceTracker();
@@ -64,9 +68,14 @@ export class HeadTrackedSpaceApp {
     this.introBgVideo.setAttribute("playsinline", "true");
     this.introBgVideo.preload = "auto";
 
+    this.bgMusic.className = "bg-music-audio";
     this.bgMusic.src = "/justfornow.mp3";
     this.bgMusic.loop = true;
     this.bgMusic.preload = "auto";
+    this.bgMusic.autoplay = true;
+    this.bgMusic.setAttribute("playsinline", "true");
+    this.bgMusic.setAttribute("aria-hidden", "true");
+    this.wireBgMusicAutoplay();
 
     this.musicMuteButton.type = "button";
     this.musicMuteButton.className = "music-mute-button";
@@ -111,12 +120,21 @@ export class HeadTrackedSpaceApp {
     this.statusPill.textContent = "Loading tracker...";
 
     this.shell.append(
+      this.bgMusic,
       this.sceneHost,
       this.overlay,
       this.statusPill,
       this.resetButton,
       this.musicMuteButton,
       this.video,
+    );
+
+    this.shell.addEventListener(
+      "pointerdown",
+      () => {
+        this.ensureBgMusicPlaying();
+      },
+      { once: true, capture: true },
     );
   }
 
@@ -334,6 +352,15 @@ export class HeadTrackedSpaceApp {
     this.bgMusic.load();
   }
 
+  private wireBgMusicAutoplay(): void {
+    const tryPlay = (): void => {
+      void this.bgMusic.play().catch(() => {});
+    };
+    tryPlay();
+    this.bgMusic.addEventListener("loadeddata", tryPlay, { once: true });
+    this.bgMusic.addEventListener("canplay", tryPlay, { once: true });
+  }
+
   private ensureBgMusicPlaying(): void {
     void this.bgMusic.play().catch(() => {});
   }
@@ -345,7 +372,7 @@ export class HeadTrackedSpaceApp {
 
   private updateMusicMuteButtonLabel(): void {
     const muted = this.bgMusic.muted;
-    this.musicMuteButton.textContent = muted ? "Unmute music" : "Mute music";
+    this.musicMuteButton.innerHTML = muted ? MUSIC_ICON_MUTED : MUSIC_ICON_UNMUTED;
     this.musicMuteButton.setAttribute("aria-label", muted ? "Unmute background music" : "Mute background music");
     this.musicMuteButton.setAttribute("aria-pressed", muted ? "true" : "false");
   }

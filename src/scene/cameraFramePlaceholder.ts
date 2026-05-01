@@ -47,6 +47,8 @@ export type CameraFramePlaceholder = {
   root: Group;
   screenMesh: Mesh;
   update(elapsedSeconds: number, feed?: CameraFrameUpdateContext): void;
+  /** True after last `update` when distance + delay allow the inner feed to show (same threshold as screen visibility). */
+  isFacePopulated(): boolean;
   dispose(): void;
 };
 
@@ -187,6 +189,7 @@ export function createCameraFramePlaceholder(
 
   /** Wall-clock ms when video first had pixels; inner stays off until `innerDelaySeconds` after this */
   let videoLiveSinceMs: number | null = null;
+  let facePopulated = false;
 
   function update(elapsed: number, feed?: CameraFrameUpdateContext): void {
     const v = feed?.video ?? options.video;
@@ -235,6 +238,12 @@ export function createCameraFramePlaceholder(
     if (videoTexture && v && v.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
       videoTexture.needsUpdate = true;
     }
+
+    facePopulated = innerFill > innerShowAfterFill;
+  }
+
+  function isFacePopulated(): boolean {
+    return facePopulated;
   }
 
   function dispose(): void {
@@ -251,5 +260,5 @@ export function createCameraFramePlaceholder(
     videoTexture?.dispose();
   }
 
-  return { root, screenMesh, update, dispose };
+  return { root, screenMesh, update, isFacePopulated, dispose };
 }

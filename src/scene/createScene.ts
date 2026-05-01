@@ -41,6 +41,21 @@ const JOURNEY_SPEED = 0.55;
 const BASE_PITCH = -0.08;
 const BASE_YAW = 0.16;
 const CAMERA_FRAME_OFFSET_Z = 4.75;
+/** World-space gap between the two frame centers (second frame to the +X “right” of the first). */
+const CAMERA_FRAME_PAIR_SPACING_X = 1.65;
+/** Extra −Z on the right duplicate (deeper along the glide / “further back”). */
+const CAMERA_FRAME_RIGHT_DELTA_Z = -1.35;
+/** Right frame: blink-only period before inner webcam can reveal (left uses placeholder default). */
+const CAMERA_FRAME_RIGHT_INNER_DELAY_SECONDS = 3;
+/** Extra −Z on the frame behind the first (negative = deeper along the glide). */
+const CAMERA_FRAME_BACK_DELTA_Z = -2.45;
+/** Back frame: lateral offset from first frame’s X (negative = more to the left). */
+const CAMERA_FRAME_BACK_DELTA_X = -0.14;
+/** Back frame: blink-only period before inner webcam can reveal. */
+const CAMERA_FRAME_BACK_INNER_DELAY_SECONDS = 2.5;
+/** Fourth frame: offset from third frame center (+X = right, −Z = farther behind). */
+const CAMERA_FRAME_DEEP_OFFSET_X = 1.3;
+const CAMERA_FRAME_DEEP_OFFSET_Z = -2.7;
 
 export function createSceneController(
   host: HTMLDivElement,
@@ -65,22 +80,62 @@ export function createSceneController(
   const lookTarget = new Vector3();
   let currentCameraZ = CAMERA_BASE_POSITION.z;
   let hasReachedEnd = false;
+  let rightFrameStarted = false;
+  let backFrameStarted = false;
+  let deepFrameStarted = false;
 
   buildLights(scene);
   scene.add(environment.root);
 
-  const cameraFrame = createCameraFramePlaceholder({
-    center: new Vector3(
-      CAMERA_BASE_POSITION.x - 0.28,
-      CAMERA_BASE_POSITION.y + 0.1,
-      CAMERA_BASE_POSITION.z - CAMERA_FRAME_OFFSET_Z,
-    ),
+  const frameCenterY = CAMERA_BASE_POSITION.y + 0.1;
+  const frameCenterZ = CAMERA_BASE_POSITION.z - CAMERA_FRAME_OFFSET_Z;
+  const frameCenterXLeft = CAMERA_BASE_POSITION.x - 0.28;
+  const backFrameCenterX = frameCenterXLeft + CAMERA_FRAME_BACK_DELTA_X;
+  const backFrameCenterZ = frameCenterZ + CAMERA_FRAME_BACK_DELTA_Z;
+
+  const cameraFrameLeft = createCameraFramePlaceholder({
+    center: new Vector3(frameCenterXLeft, frameCenterY, frameCenterZ),
     rotationY: BASE_YAW,
     width: 0.25,
     height: 0.3,
     video: options.faceVideo,
   });
-  scene.add(cameraFrame.root);
+  const cameraFrameBack = createCameraFramePlaceholder({
+    center: new Vector3(backFrameCenterX, frameCenterY, backFrameCenterZ),
+    rotationY: BASE_YAW,
+    width: 0.25,
+    height: 0.3,
+    video: options.faceVideo,
+    innerDelaySeconds: CAMERA_FRAME_BACK_INNER_DELAY_SECONDS,
+  });
+  const cameraFrameRight = createCameraFramePlaceholder({
+    center: new Vector3(
+      frameCenterXLeft + CAMERA_FRAME_PAIR_SPACING_X,
+      frameCenterY,
+      frameCenterZ + CAMERA_FRAME_RIGHT_DELTA_Z,
+    ),
+    rotationY: BASE_YAW,
+    width: 0.25,
+    height: 0.3,
+    video: options.faceVideo,
+    innerDelaySeconds: CAMERA_FRAME_RIGHT_INNER_DELAY_SECONDS,
+  });
+  const cameraFrameDeep = createCameraFramePlaceholder({
+    center: new Vector3(
+      backFrameCenterX + CAMERA_FRAME_DEEP_OFFSET_X,
+      frameCenterY,
+      backFrameCenterZ + CAMERA_FRAME_DEEP_OFFSET_Z,
+    ),
+    rotationY: BASE_YAW,
+    width: 0.25,
+    height: 0.3,
+    video: options.faceVideo,
+    innerDelaySeconds: CAMERA_FRAME_BACK_INNER_DELAY_SECONDS,
+  });
+  cameraFrameRight.root.visible = false;
+  cameraFrameBack.root.visible = false;
+  cameraFrameDeep.root.visible = false;
+  scene.add(cameraFrameLeft.root, cameraFrameBack.root, cameraFrameRight.root, cameraFrameDeep.root);
 
   function mount(): void {
     renderer.domElement.className = "scene-canvas";
@@ -112,10 +167,35 @@ export function createSceneController(
     lookTarget.copy(camera.position).addScaledVector(lookDirection, LOOK_DISTANCE);
     camera.lookAt(lookTarget);
 
-    cameraFrame.update(elapsed, {
+    const feed = {
       video: videoFeed?.video,
       cameraWorldPosition: camera.position,
-    });
+    };
+    cameraFrameLeft.update(elapsed, feed);
+
+    if (!rightFrameStarted && cameraFrameLeft.isFacePopulated()) {
+      rightFrameStarted = true;
+    }
+    if (rightFrameStarted) {
+      cameraFrameRight.root.visible = true;
+      cameraFrameRight.update(elapsed, feed);
+    }
+
+    if (!backFrameStarted && rightFrameStarted && cameraFrameRight.isFacePopulated()) {
+      backFrameStarted = true;
+    }
+    if (backFrameStarted) {
+      cameraFrameBack.root.visible = true;
+      cameraFrameBack.update(elapsed, feed);
+    }
+
+    if (!deepFrameStarted && backFrameStarted && cameraFrameBack.isFacePopulated()) {
+      deepFrameStarted = true;
+    }
+    if (deepFrameStarted) {
+      cameraFrameDeep.root.visible = true;
+      cameraFrameDeep.update(elapsed, feed);
+    }
 
     renderer.render(scene, camera);
   }
@@ -127,11 +207,20 @@ export function createSceneController(
   function resetProgress(): void {
     currentCameraZ = CAMERA_BASE_POSITION.z;
     hasReachedEnd = false;
+    rightFrameStarted = false;
+    backFrameStarted = false;
+    deepFrameStarted = false;
+    cameraFrameRight.root.visible = false;
+    cameraFrameBack.root.visible = false;
+    cameraFrameDeep.root.visible = false;
   }
 
   function dispose(): void {
     window.removeEventListener("resize", resize);
-    cameraFrame.dispose();
+    cameraFrameLeft.dispose();
+    cameraFrameBack.dispose();
+    cameraFrameRight.dispose();
+    cameraFrameDeep.dispose();
     environment.dispose();
     renderer.dispose();
   }

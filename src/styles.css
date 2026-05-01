@@ -25,6 +25,17 @@ button {
   font: inherit;
 }
 
+.bg-music-audio {
+  position: absolute;
+  width: 0;
+  height: 0;
+  opacity: 0;
+  pointer-events: none;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  clip-path: inset(50%);
+}
+
 .app-shell {
   position: relative;
   width: 100%;
@@ -230,18 +241,26 @@ button {
   left: 1rem;
   bottom: 1rem;
   z-index: 5;
-  padding: 0.55rem 0.95rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.65rem;
+  height: 2.65rem;
+  padding: 0;
   border-radius: 999px;
   border: 1px solid rgba(154, 220, 255, 0.22);
   background: rgba(4, 10, 18, 0.78);
   backdrop-filter: blur(12px);
   color: rgba(235, 244, 255, 0.92);
-  font-size: 0.82rem;
-  font-weight: 600;
   cursor: pointer;
   transition:
     background 160ms ease,
     transform 160ms ease;
+}
+
+.music-mute-button svg {
+  display: block;
+  flex-shrink: 0;
 }
 
 .music-mute-button:hover {
@@ -296,7 +315,7 @@ button {
   .music-mute-button {
     left: 0.5rem;
     bottom: 0.5rem;
-    padding: 0.45rem 0.75rem;
-    font-size: 0.76rem;
+    width: 2.45rem;
+    height: 2.45rem;
   }
 }
