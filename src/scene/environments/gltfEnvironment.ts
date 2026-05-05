@@ -7,6 +7,7 @@ import {
   Vector3,
 } from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import { DRACOLoader } from "three/addons/loaders/DRACOLoader.js";
 
 import type { SceneEnvironment } from "../environment";
 
@@ -33,6 +34,10 @@ export function createGltfEnvironment(options: GltfEnvironmentOptions): SceneEnv
   const autoAlign = options.autoAlignCorridor ?? true;
 
   const loader = new GLTFLoader();
+  const dracoLoader = new DRACOLoader();
+  // Use a public decoder bundle so we don't need to ship decoder files.
+  dracoLoader.setDecoderPath("https://www.gstatic.com/draco/v1/decoders/");
+  loader.setDRACOLoader(dracoLoader);
 
   loader.load(
     options.url,
@@ -58,6 +63,7 @@ export function createGltfEnvironment(options: GltfEnvironmentOptions): SceneEnv
       // No default animation; keep environment static unless GLB includes its own updates.
     },
     dispose() {
+      dracoLoader.dispose();
       root.traverse((object) => {
         const geometry = Reflect.get(object, "geometry") as { dispose?: () => void } | undefined;
         if (geometry && typeof geometry.dispose === "function") {
