@@ -13,6 +13,8 @@ import type { SceneEnvironment } from "../environment";
 
 type GltfEnvironmentOptions = {
   url: string;
+  /** Called once after the GLB scene graph is attached and oriented. */
+  onLoadComplete?: () => void;
   /** Extra Y rotation (radians) added after the π flip to align the corridor with −Z travel; negate if skew flips. */
   yawAlignRad?: number;
   /**
@@ -50,6 +52,7 @@ export function createGltfEnvironment(options: GltfEnvironmentOptions): SceneEnv
         autoAlign ? computeCorridorYawCorrectionXZ(root) : 0;
       gltf.scene.rotation.y = Math.PI + yawAlign + corridorYaw;
       root.updateMatrixWorld(true);
+      options.onLoadComplete?.();
     },
     undefined,
     (error) => {

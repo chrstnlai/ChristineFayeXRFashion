@@ -10,11 +10,6 @@ import type { CameraOffset, NormalizedHeadPose } from "./types";
 const CALIBRATION_SAMPLE_COUNT = 18;
 /** Used only if `scan.mp3` metadata never loads. */
 const FALLBACK_SCAN_DURATION_SEC = 5;
-/** Boom starts this many seconds before the face-detected cue ends (overlap on fullscreen camera). */
-const BOOM_OVERLAP_FACE_SEC = 0.5;
-/** Used if face cue duration metadata is missing. */
-const FALLBACK_FACE_CUE_DURATION_SEC = 2;
-
 const MUSIC_ICON_UNMUTED = `<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>`;
 
 const MUSIC_ICON_MUTED = `<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>`;
@@ -38,15 +33,22 @@ export class HeadTrackedSpaceApp {
   private readonly faceDetectedCue = document.createElement("audio");
   private readonly scanPhaseOverlay = document.createElement("section");
   private readonly scanPhaseLine = document.createElement("div");
+  private readonly faceDetectedOverlay = document.createElement("div");
   private readonly musicMuteButton = document.createElement("button");
   private readonly video = document.createElement("video");
   private readonly tracker = new FaceTracker();
   private readonly calibrator = new HeadPoseCalibrator(CALIBRATION_SAMPLE_COUNT);
-  private readonly scene = createSceneController(this.sceneHost, { faceVideo: this.video });
+  private readonly scene = createSceneController(this.sceneHost, {
+    faceVideo: this.video,
+    onEnvironmentLoaded: () => {
+      this.tryPlayBoomAfterEnvironment();
+    },
+  });
 
   private stream: MediaStream | null = null;
   private scanPhaseTimeoutId = 0;
-  private boomOverlapTimeoutId = 0;
+  /** After face cue, play boom once the corridor GLB is visible (may load before or after this arms). */
+  private boomWaitingForEnvironment = false;
   private animationFrameId = 0;
   private videoFrameCallbackId: number | null = null;
   private lastFrameMs = 0;
@@ -110,6 +112,13 @@ export class HeadTrackedSpaceApp {
     this.scanPhaseLine.className = "scan-phase-line";
     this.scanPhaseOverlay.append(this.scanPhaseLine);
 
+    this.faceDetectedOverlay.className = "face-detected-overlay is-hidden";
+    this.faceDetectedOverlay.setAttribute("aria-hidden", "true");
+    const faceDetectedLabel = document.createElement("p");
+    faceDetectedLabel.className = "face-detected-label";
+    faceDetectedLabel.textContent = "FACE DETECTED";
+    this.faceDetectedOverlay.append(faceDetectedLabel);
+
     this.musicMuteButton.type = "button";
     this.musicMuteButton.className = "music-mute-button";
     this.musicMuteButton.setAttribute("aria-label", "Mute background music");
@@ -164,6 +173,7 @@ export class HeadTrackedSpaceApp {
       this.resetButton,
       this.musicMuteButton,
       this.video,
+      this.faceDetectedOverlay,
     );
 
     this.shell.addEventListener(
@@ -266,38 +276,21 @@ export class HeadTrackedSpaceApp {
       window.clearTimeout(this.scanPhaseTimeoutId);
       this.scanPhaseTimeoutId = 0;
     }
-    this.clearBoomOverlapSchedule();
     this.stopScanSfx();
 
     this.shell.classList.remove("scan-phase-active");
     this.scanPhaseOverlay.classList.add("is-hidden");
+    this.hideFaceDetectedOverlay();
   }
 
-  private clearBoomOverlapSchedule(): void {
-    if (this.boomOverlapTimeoutId !== 0) {
-      window.clearTimeout(this.boomOverlapTimeoutId);
-      this.boomOverlapTimeoutId = 0;
-    }
+  private showFaceDetectedOverlay(): void {
+    this.faceDetectedOverlay.classList.remove("is-hidden");
+    this.faceDetectedOverlay.setAttribute("aria-hidden", "false");
   }
 
-  private async ensureAudioDurationSeconds(audio: HTMLAudioElement): Promise<number> {
-    const valid = (d: number): boolean => Number.isFinite(d) && d > 0;
-
-    if (audio.readyState >= HTMLMediaElement.HAVE_METADATA && valid(audio.duration)) {
-      return audio.duration;
-    }
-
-    await new Promise<void>((resolve) => {
-      const timeoutId = window.setTimeout(resolve, 3000);
-      const done = (): void => {
-        window.clearTimeout(timeoutId);
-        resolve();
-      };
-      audio.addEventListener("loadedmetadata", done, { once: true });
-      audio.addEventListener("error", done, { once: true });
-    });
-
-    return valid(audio.duration) ? audio.duration : FALLBACK_FACE_CUE_DURATION_SEC;
+  private hideFaceDetectedOverlay(): void {
+    this.faceDetectedOverlay.classList.add("is-hidden");
+    this.faceDetectedOverlay.setAttribute("aria-hidden", "true");
   }
 
   private stopScanSfx(): void {
@@ -321,24 +314,13 @@ export class HeadTrackedSpaceApp {
       return;
     }
 
-    // Scan done: hide laser only — stay fullscreen during face cue; boom drops in slightly before cue ends.
+    // Scan done: hide laser only — stay fullscreen during face cue; boom plays once the 3D corridor is visible.
     this.scanPhaseOverlay.classList.add("is-hidden");
     this.stopScanSfx();
 
-    const cue = this.faceDetectedCue;
-    const durSec = await this.ensureAudioDurationSeconds(cue);
-    const boomDelayMs = Math.max(0, (durSec - BOOM_OVERLAP_FACE_SEC) * 1000);
-
-    this.clearBoomOverlapSchedule();
-    this.boomOverlapTimeoutId = window.setTimeout(() => {
-      this.boomOverlapTimeoutId = 0;
-      this.startBoom.currentTime = 0;
-      void this.startBoom.play().catch(() => {});
-    }, boomDelayMs);
-
-    await this.playAudioToEnd(cue);
-
-    this.clearBoomOverlapSchedule();
+    this.showFaceDetectedOverlay();
+    await this.playAudioToEnd(this.faceDetectedCue);
+    this.hideFaceDetectedOverlay();
 
     this.bgMusic.pause();
     this.bgMusic.currentTime = 0;
@@ -353,6 +335,9 @@ export class HeadTrackedSpaceApp {
     this.animationFrameId = requestAnimationFrame(this.onFrame);
     this.startVideoTrackingLoop();
 
+    this.boomWaitingForEnvironment = true;
+    this.tryPlayBoomAfterEnvironment();
+
     if (this.trackerStatus === "ready") {
       this.beginCalibration();
     } else if (this.trackerStatus === "error") {
@@ -360,6 +345,18 @@ export class HeadTrackedSpaceApp {
     } else {
       this.setPillStatus("Camera live. Finishing tracker startup...", false);
     }
+  }
+
+  private tryPlayBoomAfterEnvironment(): void {
+    if (!this.boomWaitingForEnvironment) {
+      return;
+    }
+    if (!this.scene.hasEnvironmentLoaded()) {
+      return;
+    }
+    this.boomWaitingForEnvironment = false;
+    this.startBoom.currentTime = 0;
+    void this.startBoom.play().catch(() => {});
   }
 
   private readonly onFrame = (frameMs: number): void => {
@@ -496,6 +493,7 @@ export class HeadTrackedSpaceApp {
   }
 
   async dispose(): Promise<void> {
+    this.boomWaitingForEnvironment = false;
     this.clearScanPhaseUi();
     this.faceDetectedCue.pause();
     this.faceDetectedCue.currentTime = 0;

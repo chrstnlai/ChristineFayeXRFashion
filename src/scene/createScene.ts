@@ -24,12 +24,16 @@ type SceneController = {
   mount(): void;
   render(frameMs: number, offset: CameraOffset, videoFeed?: SceneVideoFeed): void;
   hasReachedEnd(): boolean;
+  /** True once the default GLB environment has added its scene graph (custom factories may differ). */
+  hasEnvironmentLoaded(): boolean;
   resetProgress(): void;
   dispose(): void;
 };
 
 type SceneControllerOptions = {
   environmentFactory?: SceneEnvironmentFactory;
+  /** Fires when the default GLTF environment finishes loading (ignored if you supply `environmentFactory`). */
+  onEnvironmentLoaded?: () => void;
   /** Webcam element for the opening live-feed quad */
   faceVideo?: HTMLVideoElement;
 };
@@ -74,7 +78,11 @@ export function createSceneController(
   const clock = new Clock();
   const environment = (
     options.environmentFactory ??
-    (() => createGltfEnvironment({ url: "/models/EXPORT.fast.glb" }))
+    (() =>
+      createGltfEnvironment({
+        url: "/models/EXPORT.fast.glb",
+        onLoadComplete: options.onEnvironmentLoaded,
+      }))
   )();
   const lookDirection = new Vector3();
   const lookTarget = new Vector3();
@@ -234,7 +242,18 @@ export function createSceneController(
     renderer.setSize(width, height);
   }
 
-  return { mount, render, hasReachedEnd: hasReachedEndState, resetProgress, dispose };
+  function hasEnvironmentLoaded(): boolean {
+    return environment.root.children.length > 0;
+  }
+
+  return {
+    mount,
+    render,
+    hasReachedEnd: hasReachedEndState,
+    hasEnvironmentLoaded,
+    resetProgress,
+    dispose,
+  };
 }
 
 function buildLights(scene: Scene): void {

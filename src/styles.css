@@ -287,6 +287,35 @@ button {
   display: none;
 }
 
+.face-detected-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 75;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.face-detected-overlay.is-hidden {
+  display: none;
+}
+
+.face-detected-label {
+  margin: 0;
+  padding: 0 1rem;
+  font-size: clamp(1.35rem, 5vw, 2.85rem);
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  text-indent: 0.22em;
+  text-transform: uppercase;
+  color: rgba(255, 252, 248, 0.96);
+  text-shadow:
+    0 0 18px rgba(255, 60, 80, 0.55),
+    0 0 42px rgba(255, 20, 40, 0.38),
+    0 2px 14px rgba(0, 0, 0, 0.88);
+}
+
 .scan-phase-line {
   position: absolute;
   left: 0;
