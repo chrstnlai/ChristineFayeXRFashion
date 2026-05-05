@@ -192,9 +192,8 @@ export class HeadTrackedSpaceApp {
       return;
     }
 
-    // Landing music only — stop it when experience starts.
-    this.bgMusic.pause();
-    this.bgMusic.currentTime = 0;
+    // Keep landing music (`intheair.mp3`) through scan + face cue; it stops when the face wav ends.
+    this.ensureBgMusicPlaying();
 
     this.startButton.disabled = true;
     this.overlayStatus.textContent = "Requesting camera access...";
@@ -269,13 +268,19 @@ export class HeadTrackedSpaceApp {
     this.stopScanSfx();
 
     await this.playAudioToEnd(this.faceDetectedCue);
-    await this.playAudioToEnd(this.startBoom);
+
+    // Hand off from ambient bed to boom; enter WebGL without waiting for boom to finish.
+    this.bgMusic.pause();
+    this.bgMusic.currentTime = 0;
 
     this.shell.classList.remove("scan-phase-active");
 
     this.isStarted = true;
     this.shell.classList.add("experience-live");
     this.video.classList.add("is-scene-mirror-source");
+
+    this.startBoom.currentTime = 0;
+    void this.startBoom.play().catch(() => {});
 
     this.lastFrameMs = performance.now();
     this.animationFrameId = requestAnimationFrame(this.onFrame);
