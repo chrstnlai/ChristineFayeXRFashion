@@ -30,6 +30,7 @@ export class HeadTrackedSpaceApp {
   private readonly introBgVideo = document.createElement("video");
   private readonly bgMusic = document.createElement("audio");
   private readonly startBoom = document.createElement("audio");
+  private readonly scanSfx = document.createElement("audio");
   private readonly faceDetectedCue = document.createElement("audio");
   private readonly scanPhaseOverlay = document.createElement("section");
   private readonly scanPhaseLine = document.createElement("div");
@@ -89,6 +90,11 @@ export class HeadTrackedSpaceApp {
     this.startBoom.setAttribute("playsinline", "true");
     this.startBoom.setAttribute("aria-hidden", "true");
 
+    this.scanSfx.src = "/scan.mp3";
+    this.scanSfx.preload = "auto";
+    this.scanSfx.setAttribute("playsinline", "true");
+    this.scanSfx.setAttribute("aria-hidden", "true");
+
     this.faceDetectedCue.src = "/face_detected_female_fast_us.wav";
     this.faceDetectedCue.preload = "auto";
     this.faceDetectedCue.setAttribute("playsinline", "true");
@@ -144,6 +150,7 @@ export class HeadTrackedSpaceApp {
     this.shell.append(
       this.bgMusic,
       this.startBoom,
+      this.scanSfx,
       this.faceDetectedCue,
       this.scanPhaseOverlay,
       this.sceneHost,
@@ -188,7 +195,6 @@ export class HeadTrackedSpaceApp {
     // Landing music only — stop it when experience starts.
     this.bgMusic.pause();
     this.bgMusic.currentTime = 0;
-    void this.startBoom.play().catch(() => {});
 
     this.startButton.disabled = true;
     this.overlayStatus.textContent = "Requesting camera access...";
@@ -201,6 +207,10 @@ export class HeadTrackedSpaceApp {
       this.shell.classList.add("scan-phase-active");
       this.scanPhaseOverlay.classList.remove("is-hidden");
       this.restartScanLineAnimation();
+
+      this.scanSfx.loop = true;
+      this.scanSfx.currentTime = 0;
+      void this.scanSfx.play().catch(() => {});
 
       this.scanPhaseTimeoutId = window.setTimeout(() => {
         this.scanPhaseTimeoutId = 0;
@@ -227,8 +237,26 @@ export class HeadTrackedSpaceApp {
       window.clearTimeout(this.scanPhaseTimeoutId);
       this.scanPhaseTimeoutId = 0;
     }
+    this.stopScanSfx();
+
     this.shell.classList.remove("scan-phase-active");
     this.scanPhaseOverlay.classList.add("is-hidden");
+  }
+
+  private stopScanSfx(): void {
+    this.scanSfx.loop = false;
+    this.scanSfx.pause();
+    this.scanSfx.currentTime = 0;
+  }
+
+  private async playAudioToEnd(audio: HTMLAudioElement): Promise<void> {
+    audio.currentTime = 0;
+    await new Promise<void>((resolve) => {
+      const done = (): void => resolve();
+      audio.addEventListener("ended", done, { once: true });
+      audio.addEventListener("error", done, { once: true });
+      void audio.play().catch(done);
+    });
   }
 
   private async finishScanPhaseAndEnterExperience(): Promise<void> {
@@ -236,17 +264,12 @@ export class HeadTrackedSpaceApp {
       return;
     }
 
-    // Scan animation is done; hide the laser overlay but keep fullscreen camera for the cue.
+    // Scan animation is done; hide the laser overlay but keep fullscreen camera for cues.
     this.scanPhaseOverlay.classList.add("is-hidden");
+    this.stopScanSfx();
 
-    await new Promise<void>((resolve) => {
-      const audio = this.faceDetectedCue;
-      audio.currentTime = 0;
-      const done = (): void => resolve();
-      audio.addEventListener("ended", done, { once: true });
-      audio.addEventListener("error", done, { once: true });
-      void audio.play().catch(done);
-    });
+    await this.playAudioToEnd(this.faceDetectedCue);
+    await this.playAudioToEnd(this.startBoom);
 
     this.shell.classList.remove("scan-phase-active");
 
@@ -404,6 +427,8 @@ export class HeadTrackedSpaceApp {
     this.clearScanPhaseUi();
     this.faceDetectedCue.pause();
     this.faceDetectedCue.currentTime = 0;
+    this.startBoom.pause();
+    this.startBoom.currentTime = 0;
 
     cancelAnimationFrame(this.animationFrameId);
 
