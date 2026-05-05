@@ -12,7 +12,8 @@
     "types": ["vitest/globals"],
     "allowSyntheticDefaultImports": true,
     "esModuleInterop": true,
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    "jsx": "preserve"
   },
   "include": ["src", "tests", "vite.config.ts"]
 }
