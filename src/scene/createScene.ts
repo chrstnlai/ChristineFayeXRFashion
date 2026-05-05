@@ -72,12 +72,9 @@ export function createSceneController(
   renderer.outputColorSpace = SRGBColorSpace;
 
   const clock = new Clock();
-  const environmentUrl =
-    import.meta.env.VITE_ENVIRONMENT_GLB_URL?.toString().trim() ||
-    "/models/EXPORT.glb";
   const environment = (
     options.environmentFactory ??
-    (() => createGltfEnvironment({ url: environmentUrl }))
+    (() => createGltfEnvironment({ url: "/models/EXPORT.glb" }))
   )();
   const lookDirection = new Vector3();
   const lookTarget = new Vector3();

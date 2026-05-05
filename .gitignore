@@ -2,7 +2,3 @@ node_modules/
 dist/
 .DS_Store
 *.log
-
-# Large GLB assets should be served via Vercel Blob in production
-public/models/EXPORT.glb
-public/models/envoriment.glb
