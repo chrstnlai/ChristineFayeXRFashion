@@ -10,6 +10,10 @@ import type { CameraOffset, NormalizedHeadPose } from "./types";
 const CALIBRATION_SAMPLE_COUNT = 18;
 /** Used only if `scan.mp3` metadata never loads. */
 const FALLBACK_SCAN_DURATION_SEC = 5;
+/** Boom starts this many seconds before the face-detected cue ends (overlap on fullscreen camera). */
+const BOOM_OVERLAP_FACE_SEC = 0.5;
+/** Used if face cue duration metadata is missing. */
+const FALLBACK_FACE_CUE_DURATION_SEC = 2;
 
 const MUSIC_ICON_UNMUTED = `<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>`;
 
@@ -42,6 +46,7 @@ export class HeadTrackedSpaceApp {
 
   private stream: MediaStream | null = null;
   private scanPhaseTimeoutId = 0;
+  private boomOverlapTimeoutId = 0;
   private animationFrameId = 0;
   private videoFrameCallbackId: number | null = null;
   private lastFrameMs = 0;
@@ -261,10 +266,38 @@ export class HeadTrackedSpaceApp {
       window.clearTimeout(this.scanPhaseTimeoutId);
       this.scanPhaseTimeoutId = 0;
     }
+    this.clearBoomOverlapSchedule();
     this.stopScanSfx();
 
     this.shell.classList.remove("scan-phase-active");
     this.scanPhaseOverlay.classList.add("is-hidden");
+  }
+
+  private clearBoomOverlapSchedule(): void {
+    if (this.boomOverlapTimeoutId !== 0) {
+      window.clearTimeout(this.boomOverlapTimeoutId);
+      this.boomOverlapTimeoutId = 0;
+    }
+  }
+
+  private async ensureAudioDurationSeconds(audio: HTMLAudioElement): Promise<number> {
+    const valid = (d: number): boolean => Number.isFinite(d) && d > 0;
+
+    if (audio.readyState >= HTMLMediaElement.HAVE_METADATA && valid(audio.duration)) {
+      return audio.duration;
+    }
+
+    await new Promise<void>((resolve) => {
+      const timeoutId = window.setTimeout(resolve, 3000);
+      const done = (): void => {
+        window.clearTimeout(timeoutId);
+        resolve();
+      };
+      audio.addEventListener("loadedmetadata", done, { once: true });
+      audio.addEventListener("error", done, { once: true });
+    });
+
+    return valid(audio.duration) ? audio.duration : FALLBACK_FACE_CUE_DURATION_SEC;
   }
 
   private stopScanSfx(): void {
@@ -288,11 +321,28 @@ export class HeadTrackedSpaceApp {
       return;
     }
 
-    // Scan animation is done; hide laser overlay and leave fullscreen camera immediately.
+    // Scan done: hide laser only — stay fullscreen during face cue; boom drops in slightly before cue ends.
     this.scanPhaseOverlay.classList.add("is-hidden");
     this.stopScanSfx();
 
-    // Enter WebGL + corner preview now — face-detected cue plays over the 3D world (no extra fullscreen linger).
+    const cue = this.faceDetectedCue;
+    const durSec = await this.ensureAudioDurationSeconds(cue);
+    const boomDelayMs = Math.max(0, (durSec - BOOM_OVERLAP_FACE_SEC) * 1000);
+
+    this.clearBoomOverlapSchedule();
+    this.boomOverlapTimeoutId = window.setTimeout(() => {
+      this.boomOverlapTimeoutId = 0;
+      this.startBoom.currentTime = 0;
+      void this.startBoom.play().catch(() => {});
+    }, boomDelayMs);
+
+    await this.playAudioToEnd(cue);
+
+    this.clearBoomOverlapSchedule();
+
+    this.bgMusic.pause();
+    this.bgMusic.currentTime = 0;
+
     this.shell.classList.remove("scan-phase-active");
 
     this.isStarted = true;
@@ -310,15 +360,6 @@ export class HeadTrackedSpaceApp {
     } else {
       this.setPillStatus("Camera live. Finishing tracker startup...", false);
     }
-
-    await this.playAudioToEnd(this.faceDetectedCue);
-
-    // Hand off from ambient bed to boom; don't await boom (can be long).
-    this.bgMusic.pause();
-    this.bgMusic.currentTime = 0;
-
-    this.startBoom.currentTime = 0;
-    void this.startBoom.play().catch(() => {});
   }
 
   private readonly onFrame = (frameMs: number): void => {
