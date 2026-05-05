@@ -288,24 +288,16 @@ export class HeadTrackedSpaceApp {
       return;
     }
 
-    // Scan animation is done; hide the laser overlay but keep fullscreen camera for cues.
+    // Scan animation is done; hide laser overlay and leave fullscreen camera immediately.
     this.scanPhaseOverlay.classList.add("is-hidden");
     this.stopScanSfx();
 
-    await this.playAudioToEnd(this.faceDetectedCue);
-
-    // Hand off from ambient bed to boom; enter WebGL without waiting for boom to finish.
-    this.bgMusic.pause();
-    this.bgMusic.currentTime = 0;
-
+    // Enter WebGL + corner preview now — face-detected cue plays over the 3D world (no extra fullscreen linger).
     this.shell.classList.remove("scan-phase-active");
 
     this.isStarted = true;
     this.shell.classList.add("experience-live");
     this.video.classList.add("is-scene-mirror-source");
-
-    this.startBoom.currentTime = 0;
-    void this.startBoom.play().catch(() => {});
 
     this.lastFrameMs = performance.now();
     this.animationFrameId = requestAnimationFrame(this.onFrame);
@@ -318,6 +310,15 @@ export class HeadTrackedSpaceApp {
     } else {
       this.setPillStatus("Camera live. Finishing tracker startup...", false);
     }
+
+    await this.playAudioToEnd(this.faceDetectedCue);
+
+    // Hand off from ambient bed to boom; don't await boom (can be long).
+    this.bgMusic.pause();
+    this.bgMusic.currentTime = 0;
+
+    this.startBoom.currentTime = 0;
+    void this.startBoom.play().catch(() => {});
   }
 
   private readonly onFrame = (frameMs: number): void => {
