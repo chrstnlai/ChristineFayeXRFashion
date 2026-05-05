@@ -8,8 +8,8 @@ import { startCamera, stopCamera } from "./tracking/webcam";
 import type { CameraOffset, NormalizedHeadPose } from "./types";
 
 const CALIBRATION_SAMPLE_COUNT = 18;
-/** Must match `.scan-phase-line { animation: … Xs … }` in `styles.css`. */
-const SCAN_PHASE_MS = 5000;
+/** Used only if `scan.mp3` metadata never loads. */
+const FALLBACK_SCAN_DURATION_SEC = 5;
 
 const MUSIC_ICON_UNMUTED = `<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>`;
 
@@ -202,19 +202,23 @@ export class HeadTrackedSpaceApp {
       this.stream = await startCamera(this.video);
       void this.video.play().catch(() => {});
 
-      // Fullscreen camera + scan overlay before entering WebGL experience.
+      // Fullscreen camera + scan overlay — one laser pass down + one up, timed to full length of scan.mp3.
       this.shell.classList.add("scan-phase-active");
       this.scanPhaseOverlay.classList.remove("is-hidden");
+
+      const durationSec = await this.getScanSfxDurationSeconds();
+      const durationMs = Math.max(16, Math.round(durationSec * 1000));
+      this.scanPhaseLine.style.setProperty("--scan-sweep-duration", `${durationSec}s`);
       this.restartScanLineAnimation();
 
-      this.scanSfx.loop = true;
+      this.scanSfx.loop = false;
       this.scanSfx.currentTime = 0;
       void this.scanSfx.play().catch(() => {});
 
       this.scanPhaseTimeoutId = window.setTimeout(() => {
         this.scanPhaseTimeoutId = 0;
         void this.finishScanPhaseAndEnterExperience();
-      }, SCAN_PHASE_MS);
+      }, durationMs);
 
       void this.beginTrackerWarmup();
     } catch (error) {
@@ -229,6 +233,27 @@ export class HeadTrackedSpaceApp {
     this.scanPhaseLine.style.animation = "none";
     void this.scanPhaseLine.offsetHeight;
     this.scanPhaseLine.style.animation = "";
+  }
+
+  /** Duration of scan.mp3 in seconds (metadata). Fallback if unavailable. */
+  private async getScanSfxDurationSeconds(): Promise<number> {
+    const valid = (d: number): boolean => Number.isFinite(d) && d > 0;
+
+    if (this.scanSfx.readyState >= HTMLMediaElement.HAVE_METADATA && valid(this.scanSfx.duration)) {
+      return this.scanSfx.duration;
+    }
+
+    await new Promise<void>((resolve) => {
+      const timeoutId = window.setTimeout(resolve, 3000);
+      const done = (): void => {
+        window.clearTimeout(timeoutId);
+        resolve();
+      };
+      this.scanSfx.addEventListener("loadedmetadata", done, { once: true });
+      this.scanSfx.addEventListener("error", done, { once: true });
+    });
+
+    return valid(this.scanSfx.duration) ? this.scanSfx.duration : FALLBACK_SCAN_DURATION_SEC;
   }
 
   private clearScanPhaseUi(): void {

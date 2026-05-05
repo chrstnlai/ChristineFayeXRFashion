@@ -292,20 +292,25 @@ button {
   left: 0;
   right: 0;
   top: 0;
-  height: 4px;
+  height: 6px;
   transform: translateY(-50%);
   background: linear-gradient(
     90deg,
     transparent 0%,
-    rgba(255, 40, 40, 0.05) 20%,
-    rgba(255, 55, 55, 0.95) 50%,
-    rgba(255, 40, 40, 0.05) 80%,
+    rgba(255, 0, 0, 0.2) 15%,
+    rgba(255, 240, 240, 0.95) 42%,
+    #ff1a1a 50%,
+    rgba(255, 240, 240, 0.95) 58%,
+    rgba(255, 0, 0, 0.2) 85%,
     transparent 100%
   );
   box-shadow:
-    0 0 24px rgba(255, 60, 60, 0.85),
-    0 0 48px rgba(255, 30, 30, 0.35);
-  animation: scan-phase-sweep 5s ease-in-out forwards;
+    0 0 18px 4px rgba(255, 40, 40, 1),
+    0 0 36px 8px rgba(255, 20, 20, 0.75),
+    0 0 72px 16px rgba(255, 0, 60, 0.45),
+    0 0 120px 28px rgba(255, 0, 80, 0.22);
+  /* Duration set in JS from scan.mp3 length (--scan-sweep-duration); one down (0–50%) + one up (50–100%). */
+  animation: scan-phase-sweep var(--scan-sweep-duration, 5s) linear forwards;
 }
 
 @keyframes scan-phase-sweep {
