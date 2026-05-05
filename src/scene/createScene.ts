@@ -74,7 +74,7 @@ export function createSceneController(
   const clock = new Clock();
   const environment = (
     options.environmentFactory ??
-    (() => createGltfEnvironment({ url: "/models/EXPORT.glb" }))
+    (() => createGltfEnvironment({ url: "/models/EXPORT.optimized.glb" }))
   )();
   const lookDirection = new Vector3();
   const lookTarget = new Vector3();
