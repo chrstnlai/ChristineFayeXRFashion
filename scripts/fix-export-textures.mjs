@@ -1,8 +1,13 @@
 import { NodeIO } from "@gltf-transform/core";
 import fs from "node:fs";
 
-const input = process.argv[2] || "public/models/EXPORT.glb";
+const input = process.argv[2];
 const output = process.argv[3] || "public/models/EXPORT.fixed.glb";
+if (!input) {
+  console.error("Usage: node scripts/fix-export-textures.mjs <source.glb> [output.glb]");
+  console.error("Use your original high-res EXPORT.glb (indices match that file).");
+  process.exit(1);
+}
 
 // These texture indices were found to contain non-PNG payloads (BMP/TIFF) that
 // break texture compression tooling. We replace them with normalized PNGs.

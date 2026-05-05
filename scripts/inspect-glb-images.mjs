@@ -2,7 +2,7 @@ import { NodeIO } from "@gltf-transform/core";
 import fs from "node:fs";
 import path from "node:path";
 
-const input = process.argv[2] || "public/models/EXPORT.glb";
+const input = process.argv[2] || "public/models/EXPORT.fast.glb";
 const outDir = process.argv[3] || "tmp/export_images";
 
 fs.mkdirSync(outDir, { recursive: true });

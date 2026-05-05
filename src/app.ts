@@ -27,6 +27,7 @@ export class HeadTrackedSpaceApp {
   private readonly introTitleArt = document.createElement("img");
   private readonly introBgVideo = document.createElement("video");
   private readonly bgMusic = document.createElement("audio");
+  private readonly startBoom = document.createElement("audio");
   private readonly musicMuteButton = document.createElement("button");
   private readonly video = document.createElement("video");
   private readonly tracker = new FaceTracker();
@@ -69,13 +70,18 @@ export class HeadTrackedSpaceApp {
     this.introBgVideo.preload = "auto";
 
     this.bgMusic.className = "bg-music-audio";
-    this.bgMusic.src = "/justfornow.mp3";
+    this.bgMusic.src = "/intheair.mp3";
     this.bgMusic.loop = true;
     this.bgMusic.preload = "auto";
     this.bgMusic.autoplay = true;
     this.bgMusic.setAttribute("playsinline", "true");
     this.bgMusic.setAttribute("aria-hidden", "true");
     this.wireBgMusicAutoplay();
+
+    this.startBoom.src = "/boom.mp3";
+    this.startBoom.preload = "auto";
+    this.startBoom.setAttribute("playsinline", "true");
+    this.startBoom.setAttribute("aria-hidden", "true");
 
     this.musicMuteButton.type = "button";
     this.musicMuteButton.className = "music-mute-button";
@@ -121,6 +127,7 @@ export class HeadTrackedSpaceApp {
 
     this.shell.append(
       this.bgMusic,
+      this.startBoom,
       this.sceneHost,
       this.overlay,
       this.statusPill,
@@ -160,7 +167,11 @@ export class HeadTrackedSpaceApp {
       return;
     }
 
-    this.ensureBgMusicPlaying();
+    // Landing music only — stop it when experience starts.
+    this.bgMusic.pause();
+    this.bgMusic.currentTime = 0;
+    void this.startBoom.play().catch(() => {});
+
     this.isStarted = true;
     this.startButton.disabled = true;
     this.overlayStatus.textContent = "Requesting camera access...";
