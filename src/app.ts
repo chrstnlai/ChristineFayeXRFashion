@@ -8,6 +8,8 @@ import { startCamera, stopCamera } from "./tracking/webcam";
 import type { CameraOffset, NormalizedHeadPose } from "./types";
 
 const CALIBRATION_SAMPLE_COUNT = 18;
+/** Must match `.scan-phase-line { animation: … Xs … }` in `styles.css`. */
+const SCAN_PHASE_MS = 5000;
 
 const MUSIC_ICON_UNMUTED = `<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>`;
 
@@ -28,6 +30,9 @@ export class HeadTrackedSpaceApp {
   private readonly introBgVideo = document.createElement("video");
   private readonly bgMusic = document.createElement("audio");
   private readonly startBoom = document.createElement("audio");
+  private readonly faceDetectedCue = document.createElement("audio");
+  private readonly scanPhaseOverlay = document.createElement("section");
+  private readonly scanPhaseLine = document.createElement("div");
   private readonly musicMuteButton = document.createElement("button");
   private readonly video = document.createElement("video");
   private readonly tracker = new FaceTracker();
@@ -35,6 +40,7 @@ export class HeadTrackedSpaceApp {
   private readonly scene = createSceneController(this.sceneHost, { faceVideo: this.video });
 
   private stream: MediaStream | null = null;
+  private scanPhaseTimeoutId = 0;
   private animationFrameId = 0;
   private videoFrameCallbackId: number | null = null;
   private lastFrameMs = 0;
@@ -83,6 +89,16 @@ export class HeadTrackedSpaceApp {
     this.startBoom.setAttribute("playsinline", "true");
     this.startBoom.setAttribute("aria-hidden", "true");
 
+    this.faceDetectedCue.src = "/face_detected_female_fast_us.wav";
+    this.faceDetectedCue.preload = "auto";
+    this.faceDetectedCue.setAttribute("playsinline", "true");
+    this.faceDetectedCue.setAttribute("aria-hidden", "true");
+
+    this.scanPhaseOverlay.className = "scan-phase-overlay is-hidden";
+    this.scanPhaseOverlay.setAttribute("aria-hidden", "true");
+    this.scanPhaseLine.className = "scan-phase-line";
+    this.scanPhaseOverlay.append(this.scanPhaseLine);
+
     this.musicMuteButton.type = "button";
     this.musicMuteButton.className = "music-mute-button";
     this.musicMuteButton.setAttribute("aria-label", "Mute background music");
@@ -128,6 +144,8 @@ export class HeadTrackedSpaceApp {
     this.shell.append(
       this.bgMusic,
       this.startBoom,
+      this.faceDetectedCue,
+      this.scanPhaseOverlay,
       this.sceneHost,
       this.overlay,
       this.statusPill,
@@ -163,7 +181,7 @@ export class HeadTrackedSpaceApp {
   }
 
   private async handleStart(): Promise<void> {
-    if (this.isStarted) {
+    if (this.isStarted || this.scanPhaseTimeoutId !== 0) {
       return;
     }
 
@@ -172,33 +190,80 @@ export class HeadTrackedSpaceApp {
     this.bgMusic.currentTime = 0;
     void this.startBoom.play().catch(() => {});
 
-    this.isStarted = true;
     this.startButton.disabled = true;
     this.overlayStatus.textContent = "Requesting camera access...";
 
     try {
       this.stream = await startCamera(this.video);
-      this.lastFrameMs = performance.now();
-      this.animationFrameId = requestAnimationFrame(this.onFrame);
-      this.startVideoTrackingLoop();
-      this.shell.classList.add("experience-live");
-      this.video.classList.add("is-scene-mirror-source");
+      void this.video.play().catch(() => {});
 
-      if (this.trackerStatus === "ready") {
-        this.beginCalibration();
-      } else if (this.trackerStatus === "error") {
-        this.setPillStatus(`Tracking unavailable: ${this.trackerErrorMessage}`, false);
-      } else {
-        this.setPillStatus("Camera live. Finishing tracker startup...", false);
-      }
+      // Fullscreen camera + scan overlay before entering WebGL experience.
+      this.shell.classList.add("scan-phase-active");
+      this.scanPhaseOverlay.classList.remove("is-hidden");
+      this.restartScanLineAnimation();
+
+      this.scanPhaseTimeoutId = window.setTimeout(() => {
+        this.scanPhaseTimeoutId = 0;
+        void this.finishScanPhaseAndEnterExperience();
+      }, SCAN_PHASE_MS);
 
       void this.beginTrackerWarmup();
     } catch (error) {
-      this.isStarted = false;
-      this.video.classList.remove("is-scene-mirror-source");
+      this.clearScanPhaseUi();
       this.startButton.disabled = false;
       this.overlayStatus.textContent =
         error instanceof Error ? error.message : "Unable to start the camera.";
+    }
+  }
+
+  private restartScanLineAnimation(): void {
+    this.scanPhaseLine.style.animation = "none";
+    void this.scanPhaseLine.offsetHeight;
+    this.scanPhaseLine.style.animation = "";
+  }
+
+  private clearScanPhaseUi(): void {
+    if (this.scanPhaseTimeoutId !== 0) {
+      window.clearTimeout(this.scanPhaseTimeoutId);
+      this.scanPhaseTimeoutId = 0;
+    }
+    this.shell.classList.remove("scan-phase-active");
+    this.scanPhaseOverlay.classList.add("is-hidden");
+  }
+
+  private async finishScanPhaseAndEnterExperience(): Promise<void> {
+    if (this.isStarted) {
+      return;
+    }
+
+    // Scan animation is done; hide the laser overlay but keep fullscreen camera for the cue.
+    this.scanPhaseOverlay.classList.add("is-hidden");
+
+    await new Promise<void>((resolve) => {
+      const audio = this.faceDetectedCue;
+      audio.currentTime = 0;
+      const done = (): void => resolve();
+      audio.addEventListener("ended", done, { once: true });
+      audio.addEventListener("error", done, { once: true });
+      void audio.play().catch(done);
+    });
+
+    this.shell.classList.remove("scan-phase-active");
+
+    this.isStarted = true;
+    this.shell.classList.add("experience-live");
+    this.video.classList.add("is-scene-mirror-source");
+
+    this.lastFrameMs = performance.now();
+    this.animationFrameId = requestAnimationFrame(this.onFrame);
+    this.startVideoTrackingLoop();
+
+    if (this.trackerStatus === "ready") {
+      this.beginCalibration();
+    } else if (this.trackerStatus === "error") {
+      this.setPillStatus(`Tracking unavailable: ${this.trackerErrorMessage}`, false);
+    } else {
+      this.setPillStatus("Camera live. Finishing tracker startup...", false);
     }
   }
 
@@ -336,6 +401,10 @@ export class HeadTrackedSpaceApp {
   }
 
   async dispose(): Promise<void> {
+    this.clearScanPhaseUi();
+    this.faceDetectedCue.pause();
+    this.faceDetectedCue.currentTime = 0;
+
     cancelAnimationFrame(this.animationFrameId);
 
     if (this.videoFrameCallbackId !== null && this.supportsVideoFrameCallback()) {
