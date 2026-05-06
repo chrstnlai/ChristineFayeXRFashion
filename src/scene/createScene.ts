@@ -38,17 +38,23 @@ type SceneControllerOptions = {
   faceVideo?: HTMLVideoElement;
 };
 
-const CAMERA_BASE_POSITION = new Vector3(0.68, 1.52, 25);
+const CAMERA_BASE_POSITION = new Vector3(-0.1, 1.52, 25);
 const LOOK_DISTANCE = 12;
 const JOURNEY_END_Z = -28;
 const JOURNEY_SPEED = 0.55;
 const BASE_PITCH = -0.08;
 const BASE_YAW = 0.16;
-const CAMERA_FRAME_OFFSET_Z = 4.75;
+const CAMERA_FRAME_OFFSET_Z = 4.6;
+/** Extra +Y on the first (left) blinking frame only (world up). */
+const CAMERA_FRAME_FIRST_CENTER_Y_OFFSET = 0.12;
 /** World-space gap between the two frame centers (second frame to the +X “right” of the first). */
 const CAMERA_FRAME_PAIR_SPACING_X = 1.65;
+/** Extra X on the second (right) front frame only (negative = left, positive = right). */
+const CAMERA_FRAME_RIGHT_DELTA_X = -0.22;
+/** Extra rotation Y on the right frame only (negative = tilt a bit to the left). */
+const CAMERA_FRAME_RIGHT_ROTATION_Y_OFFSET = -0.1;
 /** Extra −Z on the right duplicate (deeper along the glide / “further back”). */
-const CAMERA_FRAME_RIGHT_DELTA_Z = -1.35;
+const CAMERA_FRAME_RIGHT_DELTA_Z = -1.5;
 /** Right frame: blink-only period before inner webcam can reveal (left uses placeholder default). */
 const CAMERA_FRAME_RIGHT_INNER_DELAY_SECONDS = 3;
 /** Extra −Z on the frame behind the first (negative = deeper along the glide). */
@@ -114,13 +120,14 @@ export function createSceneController(
   scene.add(environment.root);
 
   const frameCenterY = CAMERA_BASE_POSITION.y + 0.1;
+  const frameCenterYFirst = frameCenterY + CAMERA_FRAME_FIRST_CENTER_Y_OFFSET;
   const frameCenterZ = CAMERA_BASE_POSITION.z - CAMERA_FRAME_OFFSET_Z;
-  const frameCenterXLeft = CAMERA_BASE_POSITION.x - 0.28;
+  const frameCenterXLeft = CAMERA_BASE_POSITION.x - 0.42;
   const backFrameCenterX = frameCenterXLeft + CAMERA_FRAME_BACK_DELTA_X;
   const backFrameCenterZ = frameCenterZ + CAMERA_FRAME_BACK_DELTA_Z;
 
   const cameraFrameLeft = createCameraFramePlaceholder({
-    center: new Vector3(frameCenterXLeft, frameCenterY, frameCenterZ),
+    center: new Vector3(frameCenterXLeft, frameCenterYFirst, frameCenterZ),
     rotationY: BASE_YAW,
     width: 0.25,
     height: 0.3,
@@ -136,11 +143,11 @@ export function createSceneController(
   });
   const cameraFrameRight = createCameraFramePlaceholder({
     center: new Vector3(
-      frameCenterXLeft + CAMERA_FRAME_PAIR_SPACING_X,
+      frameCenterXLeft + CAMERA_FRAME_PAIR_SPACING_X + CAMERA_FRAME_RIGHT_DELTA_X,
       frameCenterY,
       frameCenterZ + CAMERA_FRAME_RIGHT_DELTA_Z,
     ),
-    rotationY: BASE_YAW,
+    rotationY: BASE_YAW + CAMERA_FRAME_RIGHT_ROTATION_Y_OFFSET,
     width: 0.25,
     height: 0.3,
     video: options.faceVideo,

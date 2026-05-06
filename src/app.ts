@@ -10,6 +10,11 @@ import type { CameraOffset, NormalizedHeadPose } from "./types";
 const CALIBRATION_SAMPLE_COUNT = 18;
 /** Used only if `scan.mp3` metadata never loads. */
 const FALLBACK_SCAN_DURATION_SEC = 5;
+/**
+ * Dev / rehearsal: skip laser scan + “FACE DETECTED” cue and go straight to the corridor after camera starts.
+ * Set back to `false` when you want the full scanning flow again.
+ */
+const SKIP_SCAN_AND_FACE_CUE_FOR_DEV = true;
 const MUSIC_ICON_UNMUTED = `<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>`;
 
 const MUSIC_ICON_MUTED = `<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>`;
@@ -89,7 +94,6 @@ export class HeadTrackedSpaceApp {
     this.bgMusic.src = "/intheair.mp3";
     this.bgMusic.loop = true;
     this.bgMusic.preload = "auto";
-    this.bgMusic.autoplay = true;
     this.bgMusic.setAttribute("playsinline", "true");
     this.bgMusic.setAttribute("aria-hidden", "true");
     this.wireBgMusicAutoplay();
@@ -229,7 +233,6 @@ export class HeadTrackedSpaceApp {
       return;
     }
 
-    // Keep landing music (`intheair.mp3`) through scan + face cue; it stops when the face wav ends.
     this.ensureBgMusicPlaying();
 
     this.startButton.disabled = true;
@@ -238,6 +241,12 @@ export class HeadTrackedSpaceApp {
     try {
       this.stream = await startCamera(this.video);
       void this.video.play().catch(() => {});
+
+      if (SKIP_SCAN_AND_FACE_CUE_FOR_DEV) {
+        void this.beginTrackerWarmup();
+        await this.finishScanPhaseAndEnterExperience(true);
+        return;
+      }
 
       // Fullscreen camera + scan overlay — one laser pass down + one up, timed to full length of scan.mp3.
       this.shell.classList.add("scan-phase-active");
@@ -331,7 +340,7 @@ export class HeadTrackedSpaceApp {
     });
   }
 
-  private async finishScanPhaseAndEnterExperience(): Promise<void> {
+  private async finishScanPhaseAndEnterExperience(skipFaceCue = false): Promise<void> {
     if (this.isStarted) {
       return;
     }
@@ -340,12 +349,11 @@ export class HeadTrackedSpaceApp {
     this.scanPhaseOverlay.classList.add("is-hidden");
     this.stopScanSfx();
 
-    this.showFaceDetectedOverlay();
-    await this.playAudioToEnd(this.faceDetectedCue);
-    this.hideFaceDetectedOverlay();
-
-    this.bgMusic.pause();
-    this.bgMusic.currentTime = 0;
+    if (!skipFaceCue) {
+      this.showFaceDetectedOverlay();
+      await this.playAudioToEnd(this.faceDetectedCue);
+      this.hideFaceDetectedOverlay();
+    }
 
     this.shell.classList.remove("scan-phase-active");
 
@@ -377,6 +385,7 @@ export class HeadTrackedSpaceApp {
       return;
     }
     this.boomWaitingForEnvironment = false;
+    void this.bgMusic.play().catch(() => {});
     this.startBoom.currentTime = 0;
     void this.startBoom.play().catch(() => {});
   }
@@ -564,6 +573,9 @@ export class HeadTrackedSpaceApp {
 
   private toggleMusicMute(): void {
     this.bgMusic.muted = !this.bgMusic.muted;
+    if (!this.bgMusic.muted) {
+      this.ensureBgMusicPlaying();
+    }
     this.updateMusicMuteButtonLabel();
   }
 
