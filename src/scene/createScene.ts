@@ -82,7 +82,7 @@ export function createSceneController(
     options.environmentFactory ??
     (() =>
       createGltfEnvironment({
-        url: "/models/fog2.glb",
+        url: "/models/fog3.glb",
         worldRollZRad: Math.PI,
         onLoadComplete: () => {
           environmentFullyReady = true;
