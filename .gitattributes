@@ -3,3 +3,4 @@
 # Exception: keep the web-optimized environment in regular Git so Vercel serves
 # the real binary (Vercel doesn't reliably pull LFS objects).
 public/models/EXPORT.fast.glb -filter -diff -merge -text
+public/models/fog2.glb -filter -diff -merge -text

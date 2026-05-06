@@ -24,7 +24,7 @@ type SceneController = {
   mount(): void;
   render(frameMs: number, offset: CameraOffset, videoFeed?: SceneVideoFeed): void;
   hasReachedEnd(): boolean;
-  /** True once the default GLB environment has added its scene graph (custom factories may differ). */
+  /** True once the default GLB is fully renderable (textures + paint frames); custom factories use mesh presence only. */
   hasEnvironmentLoaded(): boolean;
   resetProgress(): void;
   dispose(): void;
@@ -32,7 +32,7 @@ type SceneController = {
 
 type SceneControllerOptions = {
   environmentFactory?: SceneEnvironmentFactory;
-  /** Fires when the default GLTF environment finishes loading (ignored if you supply `environmentFactory`). */
+  /** Fires when the default GLTF environment is fully renderable (ignored if you supply `environmentFactory`). */
   onEnvironmentLoaded?: () => void;
   /** Webcam element for the opening live-feed quad */
   faceVideo?: HTMLVideoElement;
@@ -76,12 +76,18 @@ export function createSceneController(
   renderer.outputColorSpace = SRGBColorSpace;
 
   const clock = new Clock();
+  /** Default GLTF path: becomes true only after geometry, textures, and frame delay (see gltfEnvironment). */
+  let environmentFullyReady = false;
   const environment = (
     options.environmentFactory ??
     (() =>
       createGltfEnvironment({
-        url: "/models/EXPORT.fast.glb",
-        onLoadComplete: options.onEnvironmentLoaded,
+        url: "/models/fog2.glb",
+        flipCorridor180: true,
+        onLoadComplete: () => {
+          environmentFullyReady = true;
+          options.onEnvironmentLoaded?.();
+        },
       }))
   )();
   const lookDirection = new Vector3();
@@ -243,7 +249,10 @@ export function createSceneController(
   }
 
   function hasEnvironmentLoaded(): boolean {
-    return environment.root.children.length > 0;
+    if (options.environmentFactory != null) {
+      return environment.root.children.length > 0;
+    }
+    return environmentFullyReady;
   }
 
   return {

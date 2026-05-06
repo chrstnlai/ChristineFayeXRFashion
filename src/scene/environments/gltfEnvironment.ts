@@ -4,6 +4,7 @@ import {
   Material,
   Mesh,
   Object3D,
+  Texture,
   Vector3,
 } from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
@@ -13,7 +14,10 @@ import type { SceneEnvironment } from "../environment";
 
 type GltfEnvironmentOptions = {
   url: string;
-  /** Called once after the GLB scene graph is attached and oriented. */
+  /**
+   * Called once after the GLB scene graph is attached, oriented, mesh textures have finished
+   * decoding/uploading where applicable, and at least two frames have passed (GPU paint catch-up).
+   */
   onLoadComplete?: () => void;
   /** Extra Y rotation (radians) added after the π flip to align the corridor with −Z travel; negate if skew flips. */
   yawAlignRad?: number;
@@ -22,6 +26,8 @@ type GltfEnvironmentOptions = {
    * (matches straight −Z camera glide).
    */
   autoAlignCorridor?: boolean;
+  /** When true, base Y rotation is 0 instead of π (opposite facing for −Z glide). */
+  flipCorridor180?: boolean;
 };
 
 const DEFAULT_YAW_ALIGN_RAD = -0.07;
@@ -34,6 +40,7 @@ export function createGltfEnvironment(options: GltfEnvironmentOptions): SceneEnv
   root.name = "gltfEnvironmentRoot";
   const yawAlign = options.yawAlignRad ?? DEFAULT_YAW_ALIGN_RAD;
   const autoAlign = options.autoAlignCorridor ?? true;
+  const baseYaw = options.flipCorridor180 ? 0 : Math.PI;
 
   const loader = new GLTFLoader();
   const dracoLoader = new DRACOLoader();
@@ -44,15 +51,18 @@ export function createGltfEnvironment(options: GltfEnvironmentOptions): SceneEnv
   loader.load(
     options.url,
     (gltf) => {
-      gltf.scene.rotation.y = Math.PI + yawAlign;
+      gltf.scene.rotation.y = baseYaw + yawAlign;
       root.add(gltf.scene);
       root.updateMatrixWorld(true);
 
       const corridorYaw =
         autoAlign ? computeCorridorYawCorrectionXZ(root) : 0;
-      gltf.scene.rotation.y = Math.PI + yawAlign + corridorYaw;
+      gltf.scene.rotation.y = baseYaw + yawAlign + corridorYaw;
       root.updateMatrixWorld(true);
-      options.onLoadComplete?.();
+
+      void whenGltfSubtreeFullyRenderable(gltf.scene).then(() => {
+        options.onLoadComplete?.();
+      });
     },
     undefined,
     (error) => {
@@ -166,4 +176,93 @@ function computeCorridorYawCorrectionXZ(root: Object3D): number {
   }
 
   return -Math.atan2(ex, ez);
+}
+
+function collectUniqueTextures(root: Object3D): Texture[] {
+  const seen = new Set<Texture>();
+  const out: Texture[] = [];
+
+  root.traverse((object) => {
+    const mesh = object as Mesh;
+    if (!mesh.isMesh || mesh.material == null) {
+      return;
+    }
+
+    const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+    for (const material of materials) {
+      if (!material || typeof material !== "object") {
+        continue;
+      }
+      for (const key of Object.keys(material)) {
+        const value = (material as unknown as Record<string, unknown>)[key];
+        if (
+          value &&
+          typeof value === "object" &&
+          "isTexture" in value &&
+          (value as Texture).isTexture === true
+        ) {
+          const tex = value as Texture;
+          if (!seen.has(tex)) {
+            seen.add(tex);
+            out.push(tex);
+          }
+        }
+      }
+    }
+  });
+
+  return out;
+}
+
+async function waitForTextureReady(tex: Texture): Promise<void> {
+  const image = tex.image as unknown;
+
+  if (image == null) {
+    return;
+  }
+
+  if (typeof HTMLVideoElement !== "undefined" && image instanceof HTMLVideoElement) {
+    if (image.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
+      return;
+    }
+    await new Promise<void>((resolve) => {
+      const done = (): void => resolve();
+      image.addEventListener("loadeddata", done, { once: true });
+      image.addEventListener("error", done, { once: true });
+    });
+    return;
+  }
+
+  if (typeof HTMLImageElement !== "undefined" && image instanceof HTMLImageElement) {
+    if (image.complete && image.naturalWidth > 0) {
+      return;
+    }
+    await new Promise<void>((resolve) => {
+      const done = (): void => resolve();
+      image.addEventListener("load", done, { once: true });
+      image.addEventListener("error", done, { once: true });
+    });
+    return;
+  }
+
+  if (typeof ImageBitmap !== "undefined" && image instanceof ImageBitmap) {
+    return;
+  }
+
+  // DataTexture, CompressedTexture, canvases: rely on GLTFLoader callback timing.
+}
+
+async function waitAnimationFrames(count: number): Promise<void> {
+  for (let i = 0; i < count; i++) {
+    await new Promise<void>((resolve) => {
+      requestAnimationFrame(() => resolve());
+    });
+  }
+}
+
+/** Ensures environment textures are ready and the GPU has had frames to present them. */
+async function whenGltfSubtreeFullyRenderable(scene: Object3D): Promise<void> {
+  const textures = collectUniqueTextures(scene);
+  await Promise.all(textures.map((tex) => waitForTextureReady(tex)));
+  await waitAnimationFrames(2);
 }

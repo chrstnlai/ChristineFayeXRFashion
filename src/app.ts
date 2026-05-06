@@ -47,7 +47,7 @@ export class HeadTrackedSpaceApp {
 
   private stream: MediaStream | null = null;
   private scanPhaseTimeoutId = 0;
-  /** After face cue, play boom once the corridor GLB is visible (may load before or after this arms). */
+  /** After face cue, play boom only once the corridor GLB is fully renderable (may finish loading before or after this arms). */
   private boomWaitingForEnvironment = false;
   private animationFrameId = 0;
   private videoFrameCallbackId: number | null = null;
@@ -314,7 +314,7 @@ export class HeadTrackedSpaceApp {
       return;
     }
 
-    // Scan done: hide laser only — stay fullscreen during face cue; boom plays once the 3D corridor is visible.
+    // Scan done: hide laser only — stay fullscreen during face cue; boom plays after the 3D corridor is fully loaded.
     this.scanPhaseOverlay.classList.add("is-hidden");
     this.stopScanSfx();
 

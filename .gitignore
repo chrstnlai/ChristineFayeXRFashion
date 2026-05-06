@@ -6,6 +6,6 @@ dist/
 # Local model optimization artifacts
 tmp/
 public/models/EXPORT.fixed.glb
-# Source / intermediate GLBs (only EXPORT.fast.glb is shipped)
+# Source / intermediate GLBs (fog2.glb / EXPORT.fast.glb are shipped optimized)
 public/models/EXPORT.glb
 public/models/EXPORT.optimized.glb
