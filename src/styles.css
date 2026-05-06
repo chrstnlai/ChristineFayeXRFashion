@@ -54,8 +54,10 @@ button {
 
 .live-location-badge {
   position: absolute;
-  top: clamp(0.65rem, 2vh, 1.2rem);
-  left: clamp(0.65rem, 2vw, 1.1rem);
+  top: auto;
+  left: auto;
+  bottom: clamp(0.65rem, 2vh, 1.25rem);
+  right: clamp(0.65rem, 2vw, 1.15rem);
   z-index: 80;
   display: flex;
   align-items: center;
@@ -138,7 +140,7 @@ button {
 
 .intro-title-art {
   position: absolute;
-  top: clamp(2.5rem, 9vh, 5rem);
+  top: clamp(1.75rem, 6.5vh, 3.75rem);
   left: 50%;
   transform: translateX(-50%);
   z-index: 2;
@@ -199,8 +201,9 @@ button {
 }
 
 .start-button {
-  padding: 0.85rem 1.15rem;
+  padding: 0.85rem 1.35rem;
   border: 0;
+  border-radius: 9999px;
   background: white;
   color: #04101c;
   font-weight: 600;
@@ -488,5 +491,16 @@ button {
     bottom: 0.5rem;
     width: 2.45rem;
     height: 2.45rem;
+  }
+
+  .experience-live .live-location-badge {
+    bottom: 7.75rem;
+  }
+}
+
+@media (min-width: 821px) {
+  .experience-live .live-location-badge {
+    right: 1rem;
+    bottom: calc(min(18rem, 30vw) * 0.75 + 1.35rem);
   }
 }
