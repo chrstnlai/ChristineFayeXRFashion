@@ -28,6 +28,8 @@ type GltfEnvironmentOptions = {
   autoAlignCorridor?: boolean;
   /** When true, base Y rotation is 0 instead of π (opposite facing for −Z glide). */
   flipCorridor180?: boolean;
+  /** Roll the whole environment around world Z (e.g. π flips world Y while keeping Z glide direction). */
+  worldRollZRad?: number;
 };
 
 const DEFAULT_YAW_ALIGN_RAD = -0.07;
@@ -41,6 +43,7 @@ export function createGltfEnvironment(options: GltfEnvironmentOptions): SceneEnv
   const yawAlign = options.yawAlignRad ?? DEFAULT_YAW_ALIGN_RAD;
   const autoAlign = options.autoAlignCorridor ?? true;
   const baseYaw = options.flipCorridor180 ? 0 : Math.PI;
+  const rollZ = options.worldRollZRad ?? 0;
 
   const loader = new GLTFLoader();
   const dracoLoader = new DRACOLoader();
@@ -51,8 +54,13 @@ export function createGltfEnvironment(options: GltfEnvironmentOptions): SceneEnv
   loader.load(
     options.url,
     (gltf) => {
+      const rollWrap = new Group();
+      rollWrap.name = "gltfEnvironmentRollZ";
+      rollWrap.rotation.z = rollZ;
+
       gltf.scene.rotation.y = baseYaw + yawAlign;
-      root.add(gltf.scene);
+      rollWrap.add(gltf.scene);
+      root.add(rollWrap);
       root.updateMatrixWorld(true);
 
       const corridorYaw =

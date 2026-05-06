@@ -83,7 +83,7 @@ export function createSceneController(
     (() =>
       createGltfEnvironment({
         url: "/models/fog2.glb",
-        flipCorridor180: true,
+        worldRollZRad: Math.PI,
         onLoadComplete: () => {
           environmentFullyReady = true;
           options.onEnvironmentLoaded?.();

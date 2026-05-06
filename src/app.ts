@@ -27,6 +27,7 @@ export class HeadTrackedSpaceApp {
   private readonly introVideoScrim = document.createElement("div");
   private readonly introTitleArt = document.createElement("img");
   private readonly introBgVideo = document.createElement("video");
+  private readonly liveLocationBadge = document.createElement("div");
   private readonly bgMusic = document.createElement("audio");
   private readonly startBoom = document.createElement("audio");
   private readonly scanSfx = document.createElement("audio");
@@ -75,7 +76,7 @@ export class HeadTrackedSpaceApp {
 
     this.introVideoWrap.className = "intro-video-wrap";
     this.introBgVideo.className = "intro-bg-video";
-    this.introBgVideo.src = "/mmvideo.mp4";
+    this.introBgVideo.src = "/margstore.mp4";
     this.introBgVideo.muted = true;
     this.introBgVideo.loop = true;
     this.introBgVideo.playsInline = true;
@@ -129,11 +130,21 @@ export class HeadTrackedSpaceApp {
 
     this.introVideoScrim.className = "intro-video-scrim";
     this.introTitleArt.className = "intro-title-art";
-    this.introTitleArt.src = encodeURI("/de-constructed self.png");
+    this.introTitleArt.src = "/eye.png";
     this.introTitleArt.alt = "";
     this.introTitleArt.decoding = "async";
 
     this.introVideoWrap.append(this.introBgVideo, this.introVideoScrim, this.introTitleArt);
+
+    this.liveLocationBadge.className = "live-location-badge";
+    this.liveLocationBadge.setAttribute("aria-label", "Live: Maison Margiela New York");
+    const liveDot = document.createElement("span");
+    liveDot.className = "live-location-badge__dot";
+    liveDot.setAttribute("aria-hidden", "true");
+    const liveLabel = document.createElement("span");
+    liveLabel.className = "live-location-badge__text";
+    liveLabel.textContent = "Live: Maison Margiela New York";
+    this.liveLocationBadge.append(liveDot, liveLabel);
 
     const panel = document.createElement("div");
     panel.className = "intro-panel";
@@ -174,6 +185,7 @@ export class HeadTrackedSpaceApp {
       this.musicMuteButton,
       this.video,
       this.faceDetectedOverlay,
+      this.liveLocationBadge,
     );
 
     this.shell.addEventListener(
