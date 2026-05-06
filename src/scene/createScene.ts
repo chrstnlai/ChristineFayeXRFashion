@@ -60,13 +60,17 @@ const CAMERA_FRAME_BACK_INNER_DELAY_SECONDS = 2.5;
 /** Fourth frame: offset from third frame center (+X = right, −Z = farther behind). */
 const CAMERA_FRAME_DEEP_OFFSET_X = 1.3;
 const CAMERA_FRAME_DEEP_OFFSET_Z = -2.7;
-/** After this many seconds in the live experience, flip the view 180° and begin rising past the floor. */
+/** After this many seconds in the live experience, flip the view 180°, then optional shallow sink on Y. */
 const EXPERIENCE_VIEW_FLIP_AFTER_SEC = 60;
-/** World +Y per second while rising after the flip (clears the first-side ground quickly). */
-const POST_FLIGHT_ASCENT_SPEED = 22;
+/** Stay at the normal eye height this long after the flip (180° only, no drop yet). */
+const POST_FLIGHT_DESCENT_HOLD_SEC = 1.5;
+/** World −Y per second once the hold ends. */
+const POST_FLIGHT_DESCENT_SPEED = 2.5;
+/** Max drop below the normal eye line after the hold (keep shallow). */
+const POST_FLIGHT_DESCENT_MAX_Y = 4;
 const CAMERA_FAR_DEFAULT = 140;
-/** Wider far clip while high above the corridor so geometry still draws. */
-const CAMERA_FAR_ASCENT = 560;
+/** Slightly wider far clip after the flip so the space still draws while shifted. */
+const CAMERA_FAR_FLIPPED = 280;
 
 export function createSceneController(
   host: HTMLDivElement,
@@ -192,10 +196,12 @@ export function createSceneController(
     );
 
     const postFlipElapsed = Math.max(0, liveExperienceElapsedSec - EXPERIENCE_VIEW_FLIP_AFTER_SEC);
-    const cameraY = CAMERA_BASE_POSITION.y + postFlipElapsed * POST_FLIGHT_ASCENT_SPEED;
+    const descentElapsed = Math.max(0, postFlipElapsed - POST_FLIGHT_DESCENT_HOLD_SEC);
+    const dropY = Math.min(descentElapsed * POST_FLIGHT_DESCENT_SPEED, POST_FLIGHT_DESCENT_MAX_Y);
+    const cameraY = CAMERA_BASE_POSITION.y - dropY;
     camera.position.set(CAMERA_BASE_POSITION.x, cameraY, currentCameraZ);
 
-    const desiredFar = viewFlippedVertically ? CAMERA_FAR_ASCENT : CAMERA_FAR_DEFAULT;
+    const desiredFar = viewFlippedVertically ? CAMERA_FAR_FLIPPED : CAMERA_FAR_DEFAULT;
     if (camera.far !== desiredFar) {
       camera.far = desiredFar;
       camera.updateProjectionMatrix();
