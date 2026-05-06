@@ -34,6 +34,7 @@ export class HeadTrackedSpaceApp {
   private readonly faceDetectedCue = document.createElement("audio");
   private readonly scanPhaseOverlay = document.createElement("section");
   private readonly scanPhaseLine = document.createElement("div");
+  private readonly scanHudCorners = document.createElement("div");
   private readonly faceDetectedOverlay = document.createElement("div");
   private readonly musicMuteButton = document.createElement("button");
   private readonly video = document.createElement("video");
@@ -113,6 +114,14 @@ export class HeadTrackedSpaceApp {
     this.scanPhaseLine.className = "scan-phase-line";
     this.scanPhaseOverlay.append(this.scanPhaseLine);
 
+    this.scanHudCorners.className = "scan-hud-corners";
+    this.scanHudCorners.setAttribute("aria-hidden", "true");
+    for (const corner of ["tl", "tr", "bl", "br"] as const) {
+      const bracket = document.createElement("span");
+      bracket.className = `scan-hud-corners__bracket scan-hud-corners__bracket--${corner}`;
+      this.scanHudCorners.append(bracket);
+    }
+
     this.faceDetectedOverlay.className = "face-detected-overlay is-hidden";
     this.faceDetectedOverlay.setAttribute("aria-hidden", "true");
     const faceDetectedLabel = document.createElement("p");
@@ -178,6 +187,7 @@ export class HeadTrackedSpaceApp {
       this.scanSfx,
       this.faceDetectedCue,
       this.scanPhaseOverlay,
+      this.scanHudCorners,
       this.sceneHost,
       this.overlay,
       this.statusPill,

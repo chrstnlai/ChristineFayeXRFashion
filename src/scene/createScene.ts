@@ -38,7 +38,7 @@ type SceneControllerOptions = {
   faceVideo?: HTMLVideoElement;
 };
 
-const CAMERA_BASE_POSITION = new Vector3(1, 1.28, 25);
+const CAMERA_BASE_POSITION = new Vector3(0.68, 1.52, 25);
 const LOOK_DISTANCE = 12;
 const JOURNEY_END_Z = -28;
 const JOURNEY_SPEED = 0.55;
@@ -60,6 +60,13 @@ const CAMERA_FRAME_BACK_INNER_DELAY_SECONDS = 2.5;
 /** Fourth frame: offset from third frame center (+X = right, −Z = farther behind). */
 const CAMERA_FRAME_DEEP_OFFSET_X = 1.3;
 const CAMERA_FRAME_DEEP_OFFSET_Z = -2.7;
+/** After this many seconds in the live experience, flip the view 180° and begin rising past the floor. */
+const EXPERIENCE_VIEW_FLIP_AFTER_SEC = 60;
+/** World +Y per second while rising after the flip (clears the first-side ground quickly). */
+const POST_FLIGHT_ASCENT_SPEED = 22;
+const CAMERA_FAR_DEFAULT = 140;
+/** Wider far clip while high above the corridor so geometry still draws. */
+const CAMERA_FAR_ASCENT = 560;
 
 export function createSceneController(
   host: HTMLDivElement,
@@ -68,7 +75,7 @@ export function createSceneController(
   const scene = new Scene();
   scene.background = new Color("#03060d");
 
-  const camera = new PerspectiveCamera(72, 1, 0.1, 140);
+  const camera = new PerspectiveCamera(72, 1, 0.1, CAMERA_FAR_DEFAULT);
   camera.position.copy(CAMERA_BASE_POSITION);
 
   const renderer = new WebGLRenderer({ antialias: true, alpha: false });
@@ -97,6 +104,7 @@ export function createSceneController(
   let rightFrameStarted = false;
   let backFrameStarted = false;
   let deepFrameStarted = false;
+  let liveExperienceElapsedSec = 0;
 
   buildLights(scene);
   scene.add(environment.root);
@@ -163,13 +171,19 @@ export function createSceneController(
     const elapsed = clock.elapsedTime;
     environment.update(elapsed);
 
+    if (videoFeed != null) {
+      liveExperienceElapsedSec += deltaSeconds;
+    }
+
     if (!hasReachedEnd) {
       currentCameraZ = Math.max(currentCameraZ - JOURNEY_SPEED * deltaSeconds, JOURNEY_END_Z);
       hasReachedEnd = currentCameraZ <= JOURNEY_END_Z;
     }
 
     const yaw = BASE_YAW + -offset.x * 0.28;
-    const pitch = MathUtils.clamp(BASE_PITCH - offset.y * 0.16, -0.36, 0.36);
+    const pitchBase = MathUtils.clamp(BASE_PITCH - offset.y * 0.16, -0.36, 0.36);
+    const viewFlippedVertically = liveExperienceElapsedSec >= EXPERIENCE_VIEW_FLIP_AFTER_SEC;
+    const pitch = pitchBase + (viewFlippedVertically ? Math.PI : 0);
 
     lookDirection.set(
       Math.sin(yaw) * Math.cos(pitch),
@@ -177,7 +191,17 @@ export function createSceneController(
       -Math.cos(yaw) * Math.cos(pitch),
     );
 
-    camera.position.set(CAMERA_BASE_POSITION.x, CAMERA_BASE_POSITION.y, currentCameraZ);
+    const postFlipElapsed = Math.max(0, liveExperienceElapsedSec - EXPERIENCE_VIEW_FLIP_AFTER_SEC);
+    const cameraY = CAMERA_BASE_POSITION.y + postFlipElapsed * POST_FLIGHT_ASCENT_SPEED;
+    camera.position.set(CAMERA_BASE_POSITION.x, cameraY, currentCameraZ);
+
+    const desiredFar = viewFlippedVertically ? CAMERA_FAR_ASCENT : CAMERA_FAR_DEFAULT;
+    if (camera.far !== desiredFar) {
+      camera.far = desiredFar;
+      camera.updateProjectionMatrix();
+    }
+
+    camera.up.set(0, viewFlippedVertically ? -1 : 1, 0);
     lookTarget.copy(camera.position).addScaledVector(lookDirection, LOOK_DISTANCE);
     camera.lookAt(lookTarget);
 
@@ -220,6 +244,9 @@ export function createSceneController(
 
   function resetProgress(): void {
     currentCameraZ = CAMERA_BASE_POSITION.z;
+    liveExperienceElapsedSec = 0;
+    camera.far = CAMERA_FAR_DEFAULT;
+    camera.updateProjectionMatrix();
     hasReachedEnd = false;
     rightFrameStarted = false;
     backFrameStarted = false;

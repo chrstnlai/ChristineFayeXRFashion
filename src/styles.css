@@ -266,9 +266,9 @@ button {
   padding: 0.82rem 1.15rem;
   border: 0;
   border-radius: 999px;
-  background: linear-gradient(135deg, #a5efff, #5f99ff);
+  background: #fff;
   color: #04101c;
-  font-weight: 700;
+  font-weight: 500;
   cursor: pointer;
   transition:
     opacity 220ms ease,
@@ -287,6 +287,10 @@ button {
   opacity: 0;
   visibility: hidden;
   pointer-events: none;
+}
+
+.experience-live .live-location-badge {
+  display: none;
 }
 
 .scan-phase-active .intro-overlay {
@@ -320,6 +324,62 @@ button {
   opacity: 0;
   visibility: hidden;
   pointer-events: none;
+}
+
+/* Red HUD corner brackets during laser scan + face-detected cue (while .scan-phase-active). */
+.scan-hud-corners {
+  position: absolute;
+  inset: 0;
+  z-index: 74;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    opacity 160ms ease,
+    visibility 160ms ease;
+}
+
+.app-shell.scan-phase-active .scan-hud-corners {
+  opacity: 1;
+  visibility: visible;
+}
+
+.scan-hud-corners__bracket {
+  position: absolute;
+  width: clamp(2.35rem, 7vw, 3.5rem);
+  height: clamp(2.35rem, 7vw, 3.5rem);
+  border: 0 solid #ff2020;
+  box-sizing: border-box;
+  filter: drop-shadow(0 0 3px rgba(255, 70, 70, 1)) drop-shadow(0 0 10px rgba(255, 30, 30, 0.85))
+    drop-shadow(0 0 22px rgba(255, 0, 40, 0.45));
+}
+
+.scan-hud-corners__bracket--tl {
+  top: calc(1rem + env(safe-area-inset-top, 0px));
+  left: calc(1rem + env(safe-area-inset-left, 0px));
+  border-top-width: 2px;
+  border-left-width: 2px;
+}
+
+.scan-hud-corners__bracket--tr {
+  top: calc(1rem + env(safe-area-inset-top, 0px));
+  right: calc(1rem + env(safe-area-inset-right, 0px));
+  border-top-width: 2px;
+  border-right-width: 2px;
+}
+
+.scan-hud-corners__bracket--bl {
+  bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
+  left: calc(1rem + env(safe-area-inset-left, 0px));
+  border-bottom-width: 2px;
+  border-left-width: 2px;
+}
+
+.scan-hud-corners__bracket--br {
+  bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
+  right: calc(1rem + env(safe-area-inset-right, 0px));
+  border-bottom-width: 2px;
+  border-right-width: 2px;
 }
 
 .scan-phase-overlay {
@@ -491,16 +551,5 @@ button {
     bottom: 0.5rem;
     width: 2.45rem;
     height: 2.45rem;
-  }
-
-  .experience-live .live-location-badge {
-    bottom: 7.75rem;
-  }
-}
-
-@media (min-width: 821px) {
-  .experience-live .live-location-badge {
-    right: 1rem;
-    bottom: calc(min(18rem, 30vw) * 0.75 + 1.35rem);
   }
 }
