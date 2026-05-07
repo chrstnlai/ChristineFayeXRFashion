@@ -42,6 +42,10 @@ const CAMERA_BASE_POSITION = new Vector3(-0.1, 1.52, 25);
 const LOOK_DISTANCE = 12;
 const JOURNEY_END_Z = -28;
 const JOURNEY_SPEED = 0.55;
+/** × applied to `JOURNEY_SPEED` for the +Z return glide only (second glide, after flip + Y descent). */
+const POST_FLIP_RETURN_PLUS_Z_GLIDE_SPEED_MUL = 2;
+/** × applied to `JOURNEY_SPEED` for the third-phase −Z glide (after return timer). */
+const POST_FLIP_THIRD_PHASE_GLIDE_SPEED_MUL = 1.5;
 const BASE_PITCH = -0.08;
 const BASE_YAW = 0.16;
 const CAMERA_FRAME_OFFSET_Z = 4.6;
@@ -95,10 +99,14 @@ const CAMERA_FRAME_EIGHTH_OFFSET_Z = -4;
 /** Eighth frame: blink-only period before inner webcam can reveal. */
 const CAMERA_FRAME_EIGHTH_INNER_DELAY_SECONDS = 2.5;
 /** Ninth frame: offset from eighth center (−X = left, −Z = a bit farther behind). */
-const CAMERA_FRAME_NINTH_OFFSET_X = -2.08;
+const CAMERA_FRAME_NINTH_OFFSET_X = -2.25;
 const CAMERA_FRAME_NINTH_OFFSET_Z = -1.5;
+/** Extra +Y on the ninth blinking frame (world up, relative to eighth’s center Y). */
+const CAMERA_FRAME_NINTH_CENTER_Y_OFFSET = 0.14;
 /** Ninth frame: blink-only period before inner webcam can reveal. */
 const CAMERA_FRAME_NINTH_INNER_DELAY_SECONDS = 2.5;
+/** World +Y applied the same frame as the 180° flip (then post-flip hold / descent still apply). */
+const CAMERA_FLIP_CORRIDOR_LIFT_Y = 0.52;
 /**
  * After this many seconds in the live experience, flip the view 180° (if not already flipped).
  * The ninth blinking frame’s inner face can flip earlier — see `ninthFlipFromInnerFaceLatched`.
@@ -110,6 +118,10 @@ const POST_FLIGHT_DESCENT_HOLD_SEC = 1.5;
 const POST_FLIGHT_DESCENT_SPEED = 2.5;
 /** Max drop below the normal eye line after the hold (keep shallow). */
 const POST_FLIGHT_DESCENT_MAX_Y = 4;
+/** After flip + vertical descent begins, glide +Z (opposite of the opening −Z run) up to this cap. */
+const POST_FLIP_RETURN_GLIDE_END_Z = CAMERA_BASE_POSITION.z + 5.5;
+/** After this many seconds in the +Z return glide, add π yaw and glide −Z again until `JOURNEY_END_Z`. */
+const POST_FLIP_RETURN_THIRD_PHASE_AFTER_SEC = 20.5;
 const CAMERA_FAR_DEFAULT = 140;
 /** Slightly wider far clip after the flip so the space still draws while shifted. */
 const CAMERA_FAR_FLIPPED = 280;
@@ -160,6 +172,10 @@ export function createSceneController(
   let ninthFlipFromInnerFaceLatched = false;
   /** Live-experience seconds when the corridor flip first became active (timed or ninth). */
   let corridorFlipStartedAtLiveSec: number | null = null;
+  /** When the +Z return glide (`dropY > 0` while flipped) first began. */
+  let postFlipReturnGlideStartedAtLiveSec: number | null = null;
+  /** After `POST_FLIP_RETURN_THIRD_PHASE_AFTER_SEC` in the return glide: −Z again + yaw +π. */
+  let postFlipThirdPhaseLatched = false;
 
   buildLights(scene);
   scene.add(environment.root);
@@ -203,6 +219,7 @@ export function createSceneController(
     width: 0.25,
     height: 0.3,
     video: options.faceVideo,
+    distortVideoFeed: true,
     innerDelaySeconds: CAMERA_FRAME_BACK_INNER_DELAY_SECONDS,
   });
   const cameraFrameRight = createCameraFramePlaceholder({
@@ -215,6 +232,7 @@ export function createSceneController(
     width: 0.25,
     height: 0.3,
     video: options.faceVideo,
+    distortVideoFeed: true,
     innerDelaySeconds: CAMERA_FRAME_RIGHT_INNER_DELAY_SECONDS,
   });
   const cameraFrameDeep = createCameraFramePlaceholder({
@@ -223,6 +241,7 @@ export function createSceneController(
     width: 0.25,
     height: 0.3,
     video: options.faceVideo,
+    distortVideoFeed: true,
     innerDelaySeconds: CAMERA_FRAME_BACK_INNER_DELAY_SECONDS,
   });
   const cameraFrameFifth = createCameraFramePlaceholder({
@@ -231,6 +250,7 @@ export function createSceneController(
     width: 0.25,
     height: 0.3,
     video: options.faceVideo,
+    distortVideoFeed: true,
     innerDelaySeconds: CAMERA_FRAME_FIFTH_INNER_DELAY_SECONDS,
   });
   const cameraFrameSixth = createCameraFramePlaceholder({
@@ -239,6 +259,7 @@ export function createSceneController(
     width: 0.25,
     height: 0.3,
     video: options.faceVideo,
+    distortVideoFeed: true,
     innerDelaySeconds: CAMERA_FRAME_SIXTH_INNER_DELAY_SECONDS,
   });
   const cameraFrameSeventh = createCameraFramePlaceholder({
@@ -247,6 +268,7 @@ export function createSceneController(
     width: 0.25,
     height: 0.3,
     video: options.faceVideo,
+    distortVideoFeed: true,
     innerDelaySeconds: CAMERA_FRAME_SEVENTH_INNER_DELAY_SECONDS,
   });
   const cameraFrameEighth = createCameraFramePlaceholder({
@@ -255,18 +277,20 @@ export function createSceneController(
     width: 0.25,
     height: 0.3,
     video: options.faceVideo,
+    distortVideoFeed: true,
     innerDelaySeconds: CAMERA_FRAME_EIGHTH_INNER_DELAY_SECONDS,
   });
   const cameraFrameNinth = createCameraFramePlaceholder({
     center: new Vector3(
       eighthFrameCenterX + CAMERA_FRAME_NINTH_OFFSET_X,
-      eighthFrameCenterY,
+      eighthFrameCenterY + CAMERA_FRAME_NINTH_CENTER_Y_OFFSET,
       eighthFrameCenterZ + CAMERA_FRAME_NINTH_OFFSET_Z,
     ),
     rotationY: BASE_YAW,
     width: 0.25,
     height: 0.3,
     video: options.faceVideo,
+    distortVideoFeed: true,
     innerDelaySeconds: CAMERA_FRAME_NINTH_INNER_DELAY_SECONDS,
   });
   cameraFrameRight.root.visible = false;
@@ -304,13 +328,6 @@ export function createSceneController(
     if (videoFeed != null) {
       liveExperienceElapsedSec += deltaSeconds;
     }
-
-    if (!hasReachedEnd) {
-      currentCameraZ = Math.max(currentCameraZ - JOURNEY_SPEED * deltaSeconds, JOURNEY_END_Z);
-      hasReachedEnd = currentCameraZ <= JOURNEY_END_Z;
-    }
-
-    const yaw = BASE_YAW + -offset.x * 0.28;
 
     const feed = {
       video: videoFeed?.video,
@@ -393,8 +410,44 @@ export function createSceneController(
       corridorFlipStartedAtLiveSec = liveExperienceElapsedSec;
     }
 
+    const postFlipElapsed =
+      viewFlippedVertically && corridorFlipStartedAtLiveSec !== null
+        ? Math.max(0, liveExperienceElapsedSec - corridorFlipStartedAtLiveSec)
+        : 0;
+    const descentElapsed = Math.max(0, postFlipElapsed - POST_FLIGHT_DESCENT_HOLD_SEC);
+    const dropY = Math.min(descentElapsed * POST_FLIGHT_DESCENT_SPEED, POST_FLIGHT_DESCENT_MAX_Y);
+    const flipLiftY = viewFlippedVertically ? CAMERA_FLIP_CORRIDOR_LIFT_Y : 0;
+    const cameraY = CAMERA_BASE_POSITION.y + flipLiftY - dropY;
+
+    const postFlipGlideReturn =
+      viewFlippedVertically && dropY > 0 && !hasReachedEnd && corridorFlipStartedAtLiveSec !== null;
+
+    if (postFlipGlideReturn && postFlipReturnGlideStartedAtLiveSec === null) {
+      postFlipReturnGlideStartedAtLiveSec = liveExperienceElapsedSec;
+    }
+    const postFlipReturnGlideElapsedSec =
+      postFlipReturnGlideStartedAtLiveSec !== null
+        ? Math.max(0, liveExperienceElapsedSec - postFlipReturnGlideStartedAtLiveSec)
+        : 0;
+    if (postFlipGlideReturn && postFlipReturnGlideElapsedSec >= POST_FLIP_RETURN_THIRD_PHASE_AFTER_SEC) {
+      postFlipThirdPhaseLatched = true;
+    }
+
+    const postFlipThirdPhase =
+      postFlipThirdPhaseLatched &&
+      viewFlippedVertically &&
+      dropY > 0 &&
+      !hasReachedEnd &&
+      corridorFlipStartedAtLiveSec !== null;
+    const postFlipGlideReturnPlusZ = postFlipGlideReturn && !postFlipThirdPhase;
+
     const pitchBase = MathUtils.clamp(BASE_PITCH - offset.y * 0.16, -0.36, 0.36);
     const pitch = pitchBase + (viewFlippedVertically ? Math.PI : 0);
+
+    const yaw =
+      BASE_YAW +
+      -offset.x * 0.28 +
+      (postFlipThirdPhase ? Math.PI : 0);
 
     lookDirection.set(
       Math.sin(yaw) * Math.cos(pitch),
@@ -402,13 +455,24 @@ export function createSceneController(
       -Math.cos(yaw) * Math.cos(pitch),
     );
 
-    const postFlipElapsed =
-      viewFlippedVertically && corridorFlipStartedAtLiveSec !== null
-        ? Math.max(0, liveExperienceElapsedSec - corridorFlipStartedAtLiveSec)
-        : 0;
-    const descentElapsed = Math.max(0, postFlipElapsed - POST_FLIGHT_DESCENT_HOLD_SEC);
-    const dropY = Math.min(descentElapsed * POST_FLIGHT_DESCENT_SPEED, POST_FLIGHT_DESCENT_MAX_Y);
-    const cameraY = CAMERA_BASE_POSITION.y - dropY;
+    if (!hasReachedEnd) {
+      if (postFlipThirdPhase) {
+        currentCameraZ = Math.max(
+          currentCameraZ - JOURNEY_SPEED * POST_FLIP_THIRD_PHASE_GLIDE_SPEED_MUL * deltaSeconds,
+          JOURNEY_END_Z,
+        );
+        hasReachedEnd = currentCameraZ <= JOURNEY_END_Z;
+      } else if (postFlipGlideReturnPlusZ) {
+        currentCameraZ = Math.min(
+          currentCameraZ + JOURNEY_SPEED * POST_FLIP_RETURN_PLUS_Z_GLIDE_SPEED_MUL * deltaSeconds,
+          POST_FLIP_RETURN_GLIDE_END_Z,
+        );
+      } else {
+        currentCameraZ = Math.max(currentCameraZ - JOURNEY_SPEED * deltaSeconds, JOURNEY_END_Z);
+        hasReachedEnd = currentCameraZ <= JOURNEY_END_Z;
+      }
+    }
+
     camera.position.set(CAMERA_BASE_POSITION.x, cameraY, currentCameraZ);
 
     const desiredFar = viewFlippedVertically ? CAMERA_FAR_FLIPPED : CAMERA_FAR_DEFAULT;
@@ -444,6 +508,8 @@ export function createSceneController(
     ninthFrameStarted = false;
     ninthFlipFromInnerFaceLatched = false;
     corridorFlipStartedAtLiveSec = null;
+    postFlipReturnGlideStartedAtLiveSec = null;
+    postFlipThirdPhaseLatched = false;
     cameraFrameRight.root.visible = false;
     cameraFrameBack.root.visible = false;
     cameraFrameDeep.root.visible = false;
