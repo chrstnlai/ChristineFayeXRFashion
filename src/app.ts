@@ -56,6 +56,8 @@ export class HeadTrackedSpaceApp {
   private scanPhaseTimeoutId = 0;
   /** After face cue, play boom only once the corridor GLB is fully renderable (may finish loading before or after this arms). */
   private boomWaitingForEnvironment = false;
+  /** Frames left after `hasEnvironmentLoaded()` before boom (lets the first painted frames show). */
+  private boomFramesUntilPlay: number | null = null;
   private animationFrameId = 0;
   private videoFrameCallbackId: number | null = null;
   private lastFrameMs = 0;
@@ -384,6 +386,21 @@ export class HeadTrackedSpaceApp {
     if (!this.scene.hasEnvironmentLoaded()) {
       return;
     }
+    if (this.boomFramesUntilPlay !== null) {
+      return;
+    }
+    this.boomFramesUntilPlay = 6;
+  }
+
+  private tickBoomAfterEnvironmentPaint(): void {
+    if (this.boomFramesUntilPlay === null) {
+      return;
+    }
+    this.boomFramesUntilPlay -= 1;
+    if (this.boomFramesUntilPlay > 0) {
+      return;
+    }
+    this.boomFramesUntilPlay = null;
     this.boomWaitingForEnvironment = false;
     void this.bgMusic.play().catch(() => {});
     this.startBoom.currentTime = 0;
@@ -408,6 +425,7 @@ export class HeadTrackedSpaceApp {
       this.smoothedOffset,
       this.isStarted ? { video: this.video } : undefined,
     );
+    this.tickBoomAfterEnvironmentPaint();
     this.updateRuntimeStatus(calibratedPose);
     this.resetButton.classList.toggle("is-hidden", !this.scene.hasReachedEnd());
 
@@ -525,6 +543,7 @@ export class HeadTrackedSpaceApp {
 
   async dispose(): Promise<void> {
     this.boomWaitingForEnvironment = false;
+    this.boomFramesUntilPlay = null;
     this.clearScanPhaseUi();
     this.faceDetectedCue.pause();
     this.faceDetectedCue.currentTime = 0;

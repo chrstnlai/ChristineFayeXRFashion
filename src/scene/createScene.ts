@@ -49,24 +49,60 @@ const CAMERA_FRAME_OFFSET_Z = 4.6;
 const CAMERA_FRAME_FIRST_CENTER_Y_OFFSET = 0.12;
 /** World-space gap between the two frame centers (second frame to the +X “right” of the first). */
 const CAMERA_FRAME_PAIR_SPACING_X = 1.65;
+/** Extra +Y on the second (right) blinking frame only (world up). */
+const CAMERA_FRAME_RIGHT_CENTER_Y_OFFSET = 0.1;
 /** Extra X on the second (right) front frame only (negative = left, positive = right). */
-const CAMERA_FRAME_RIGHT_DELTA_X = -0.22;
+const CAMERA_FRAME_RIGHT_DELTA_X = 0.12;
 /** Extra rotation Y on the right frame only (negative = tilt a bit to the left). */
 const CAMERA_FRAME_RIGHT_ROTATION_Y_OFFSET = -0.1;
 /** Extra −Z on the right duplicate (deeper along the glide / “further back”). */
-const CAMERA_FRAME_RIGHT_DELTA_Z = -1.5;
+const CAMERA_FRAME_RIGHT_DELTA_Z = -1.6;
 /** Right frame: blink-only period before inner webcam can reveal (left uses placeholder default). */
 const CAMERA_FRAME_RIGHT_INNER_DELAY_SECONDS = 3;
 /** Extra −Z on the frame behind the first (negative = deeper along the glide). */
 const CAMERA_FRAME_BACK_DELTA_Z = -2.45;
+/** Extra +Y on the third (back) blinking frame only (world up). */
+const CAMERA_FRAME_BACK_CENTER_Y_OFFSET = 0.08;
 /** Back frame: lateral offset from first frame’s X (negative = more to the left). */
-const CAMERA_FRAME_BACK_DELTA_X = -0.14;
+const CAMERA_FRAME_BACK_DELTA_X = -0.26;
 /** Back frame: blink-only period before inner webcam can reveal. */
 const CAMERA_FRAME_BACK_INNER_DELAY_SECONDS = 2.5;
 /** Fourth frame: offset from third frame center (+X = right, −Z = farther behind). */
 const CAMERA_FRAME_DEEP_OFFSET_X = 1.3;
 const CAMERA_FRAME_DEEP_OFFSET_Z = -2.7;
-/** After this many seconds in the live experience, flip the view 180°, then optional shallow sink on Y. */
+/** Fifth frame: offset from fourth (deep) center (−X = left, −Z = farther behind). */
+const CAMERA_FRAME_FIFTH_OFFSET_X = -2.7;
+const CAMERA_FRAME_FIFTH_OFFSET_Z = -4.2;
+/** Extra +Y on the fifth blinking frame only (world up). */
+const CAMERA_FRAME_FIFTH_CENTER_Y_OFFSET = 0.2;
+/** Fifth frame: blink-only period before inner webcam can reveal. */
+const CAMERA_FRAME_FIFTH_INNER_DELAY_SECONDS = 2.5;
+/** Sixth frame: offset from fifth center (+X = right, −Z = farther behind). */
+const CAMERA_FRAME_SIXTH_OFFSET_X = 3.5;
+const CAMERA_FRAME_SIXTH_OFFSET_Z = -3.4;
+/** Extra +Y on the sixth blinking frame relative to fifth’s center Y (negative = lower). */
+const CAMERA_FRAME_SIXTH_CENTER_Y_OFFSET = -0.18;
+/** Sixth frame: blink-only period before inner webcam can reveal. */
+const CAMERA_FRAME_SIXTH_INNER_DELAY_SECONDS = 2.5;
+/** Seventh frame: offset from sixth center (−X = left, −Z = farther behind). */
+const CAMERA_FRAME_SEVENTH_OFFSET_X = -2.4;
+const CAMERA_FRAME_SEVENTH_OFFSET_Z = -1.5;
+/** Seventh frame: blink-only period before inner webcam can reveal. */
+const CAMERA_FRAME_SEVENTH_INNER_DELAY_SECONDS = 2.5;
+/** Eighth frame: offset from seventh center (+X = right, −Z = farther behind). */
+const CAMERA_FRAME_EIGHTH_OFFSET_X = 1.12;
+const CAMERA_FRAME_EIGHTH_OFFSET_Z = -4;
+/** Eighth frame: blink-only period before inner webcam can reveal. */
+const CAMERA_FRAME_EIGHTH_INNER_DELAY_SECONDS = 2.5;
+/** Ninth frame: offset from eighth center (−X = left, −Z = a bit farther behind). */
+const CAMERA_FRAME_NINTH_OFFSET_X = -2.08;
+const CAMERA_FRAME_NINTH_OFFSET_Z = -1.5;
+/** Ninth frame: blink-only period before inner webcam can reveal. */
+const CAMERA_FRAME_NINTH_INNER_DELAY_SECONDS = 2.5;
+/**
+ * After this many seconds in the live experience, flip the view 180° (if not already flipped).
+ * The ninth blinking frame’s inner face can flip earlier — see `ninthFlipFromInnerFaceLatched`.
+ */
 const EXPERIENCE_VIEW_FLIP_AFTER_SEC = 60;
 /** Stay at the normal eye height this long after the flip (180° only, no drop yet). */
 const POST_FLIGHT_DESCENT_HOLD_SEC = 1.5;
@@ -114,7 +150,16 @@ export function createSceneController(
   let rightFrameStarted = false;
   let backFrameStarted = false;
   let deepFrameStarted = false;
+  let fifthFrameStarted = false;
+  let sixthFrameStarted = false;
+  let seventhFrameStarted = false;
+  let eighthFrameStarted = false;
+  let ninthFrameStarted = false;
   let liveExperienceElapsedSec = 0;
+  /** Once the ninth frame’s webcam quad is revealed, latch the same 180° flip as the timed flip. */
+  let ninthFlipFromInnerFaceLatched = false;
+  /** Live-experience seconds when the corridor flip first became active (timed or ninth). */
+  let corridorFlipStartedAtLiveSec: number | null = null;
 
   buildLights(scene);
   scene.add(environment.root);
@@ -125,6 +170,20 @@ export function createSceneController(
   const frameCenterXLeft = CAMERA_BASE_POSITION.x - 0.42;
   const backFrameCenterX = frameCenterXLeft + CAMERA_FRAME_BACK_DELTA_X;
   const backFrameCenterZ = frameCenterZ + CAMERA_FRAME_BACK_DELTA_Z;
+  const deepFrameCenterX = backFrameCenterX + CAMERA_FRAME_DEEP_OFFSET_X;
+  const deepFrameCenterZ = backFrameCenterZ + CAMERA_FRAME_DEEP_OFFSET_Z;
+  const fifthFrameCenterX = deepFrameCenterX + CAMERA_FRAME_FIFTH_OFFSET_X;
+  const fifthFrameCenterY = frameCenterY + CAMERA_FRAME_FIFTH_CENTER_Y_OFFSET;
+  const fifthFrameCenterZ = deepFrameCenterZ + CAMERA_FRAME_FIFTH_OFFSET_Z;
+  const sixthFrameCenterX = fifthFrameCenterX + CAMERA_FRAME_SIXTH_OFFSET_X;
+  const sixthFrameCenterY = fifthFrameCenterY + CAMERA_FRAME_SIXTH_CENTER_Y_OFFSET;
+  const sixthFrameCenterZ = fifthFrameCenterZ + CAMERA_FRAME_SIXTH_OFFSET_Z;
+  const seventhFrameCenterX = sixthFrameCenterX + CAMERA_FRAME_SEVENTH_OFFSET_X;
+  const seventhFrameCenterY = sixthFrameCenterY;
+  const seventhFrameCenterZ = sixthFrameCenterZ + CAMERA_FRAME_SEVENTH_OFFSET_Z;
+  const eighthFrameCenterX = seventhFrameCenterX + CAMERA_FRAME_EIGHTH_OFFSET_X;
+  const eighthFrameCenterY = seventhFrameCenterY;
+  const eighthFrameCenterZ = seventhFrameCenterZ + CAMERA_FRAME_EIGHTH_OFFSET_Z;
 
   const cameraFrameLeft = createCameraFramePlaceholder({
     center: new Vector3(frameCenterXLeft, frameCenterYFirst, frameCenterZ),
@@ -132,9 +191,14 @@ export function createSceneController(
     width: 0.25,
     height: 0.3,
     video: options.faceVideo,
+    distortVideoFeed: true,
   });
   const cameraFrameBack = createCameraFramePlaceholder({
-    center: new Vector3(backFrameCenterX, frameCenterY, backFrameCenterZ),
+    center: new Vector3(
+      backFrameCenterX,
+      frameCenterY + CAMERA_FRAME_BACK_CENTER_Y_OFFSET,
+      backFrameCenterZ,
+    ),
     rotationY: BASE_YAW,
     width: 0.25,
     height: 0.3,
@@ -144,7 +208,7 @@ export function createSceneController(
   const cameraFrameRight = createCameraFramePlaceholder({
     center: new Vector3(
       frameCenterXLeft + CAMERA_FRAME_PAIR_SPACING_X + CAMERA_FRAME_RIGHT_DELTA_X,
-      frameCenterY,
+      frameCenterY + CAMERA_FRAME_RIGHT_CENTER_Y_OFFSET,
       frameCenterZ + CAMERA_FRAME_RIGHT_DELTA_Z,
     ),
     rotationY: BASE_YAW + CAMERA_FRAME_RIGHT_ROTATION_Y_OFFSET,
@@ -154,21 +218,76 @@ export function createSceneController(
     innerDelaySeconds: CAMERA_FRAME_RIGHT_INNER_DELAY_SECONDS,
   });
   const cameraFrameDeep = createCameraFramePlaceholder({
-    center: new Vector3(
-      backFrameCenterX + CAMERA_FRAME_DEEP_OFFSET_X,
-      frameCenterY,
-      backFrameCenterZ + CAMERA_FRAME_DEEP_OFFSET_Z,
-    ),
+    center: new Vector3(deepFrameCenterX, frameCenterY, deepFrameCenterZ),
     rotationY: BASE_YAW,
     width: 0.25,
     height: 0.3,
     video: options.faceVideo,
     innerDelaySeconds: CAMERA_FRAME_BACK_INNER_DELAY_SECONDS,
   });
+  const cameraFrameFifth = createCameraFramePlaceholder({
+    center: new Vector3(fifthFrameCenterX, fifthFrameCenterY, fifthFrameCenterZ),
+    rotationY: BASE_YAW,
+    width: 0.25,
+    height: 0.3,
+    video: options.faceVideo,
+    innerDelaySeconds: CAMERA_FRAME_FIFTH_INNER_DELAY_SECONDS,
+  });
+  const cameraFrameSixth = createCameraFramePlaceholder({
+    center: new Vector3(sixthFrameCenterX, sixthFrameCenterY, sixthFrameCenterZ),
+    rotationY: BASE_YAW,
+    width: 0.25,
+    height: 0.3,
+    video: options.faceVideo,
+    innerDelaySeconds: CAMERA_FRAME_SIXTH_INNER_DELAY_SECONDS,
+  });
+  const cameraFrameSeventh = createCameraFramePlaceholder({
+    center: new Vector3(seventhFrameCenterX, seventhFrameCenterY, seventhFrameCenterZ),
+    rotationY: BASE_YAW,
+    width: 0.25,
+    height: 0.3,
+    video: options.faceVideo,
+    innerDelaySeconds: CAMERA_FRAME_SEVENTH_INNER_DELAY_SECONDS,
+  });
+  const cameraFrameEighth = createCameraFramePlaceholder({
+    center: new Vector3(eighthFrameCenterX, eighthFrameCenterY, eighthFrameCenterZ),
+    rotationY: BASE_YAW,
+    width: 0.25,
+    height: 0.3,
+    video: options.faceVideo,
+    innerDelaySeconds: CAMERA_FRAME_EIGHTH_INNER_DELAY_SECONDS,
+  });
+  const cameraFrameNinth = createCameraFramePlaceholder({
+    center: new Vector3(
+      eighthFrameCenterX + CAMERA_FRAME_NINTH_OFFSET_X,
+      eighthFrameCenterY,
+      eighthFrameCenterZ + CAMERA_FRAME_NINTH_OFFSET_Z,
+    ),
+    rotationY: BASE_YAW,
+    width: 0.25,
+    height: 0.3,
+    video: options.faceVideo,
+    innerDelaySeconds: CAMERA_FRAME_NINTH_INNER_DELAY_SECONDS,
+  });
   cameraFrameRight.root.visible = false;
   cameraFrameBack.root.visible = false;
   cameraFrameDeep.root.visible = false;
-  scene.add(cameraFrameLeft.root, cameraFrameBack.root, cameraFrameRight.root, cameraFrameDeep.root);
+  cameraFrameFifth.root.visible = false;
+  cameraFrameSixth.root.visible = false;
+  cameraFrameSeventh.root.visible = false;
+  cameraFrameEighth.root.visible = false;
+  cameraFrameNinth.root.visible = false;
+  scene.add(
+    cameraFrameLeft.root,
+    cameraFrameBack.root,
+    cameraFrameRight.root,
+    cameraFrameDeep.root,
+    cameraFrameFifth.root,
+    cameraFrameSixth.root,
+    cameraFrameSeventh.root,
+    cameraFrameEighth.root,
+    cameraFrameNinth.root,
+  );
 
   function mount(): void {
     renderer.domElement.className = "scene-canvas";
@@ -192,31 +311,6 @@ export function createSceneController(
     }
 
     const yaw = BASE_YAW + -offset.x * 0.28;
-    const pitchBase = MathUtils.clamp(BASE_PITCH - offset.y * 0.16, -0.36, 0.36);
-    const viewFlippedVertically = liveExperienceElapsedSec >= EXPERIENCE_VIEW_FLIP_AFTER_SEC;
-    const pitch = pitchBase + (viewFlippedVertically ? Math.PI : 0);
-
-    lookDirection.set(
-      Math.sin(yaw) * Math.cos(pitch),
-      Math.sin(pitch),
-      -Math.cos(yaw) * Math.cos(pitch),
-    );
-
-    const postFlipElapsed = Math.max(0, liveExperienceElapsedSec - EXPERIENCE_VIEW_FLIP_AFTER_SEC);
-    const descentElapsed = Math.max(0, postFlipElapsed - POST_FLIGHT_DESCENT_HOLD_SEC);
-    const dropY = Math.min(descentElapsed * POST_FLIGHT_DESCENT_SPEED, POST_FLIGHT_DESCENT_MAX_Y);
-    const cameraY = CAMERA_BASE_POSITION.y - dropY;
-    camera.position.set(CAMERA_BASE_POSITION.x, cameraY, currentCameraZ);
-
-    const desiredFar = viewFlippedVertically ? CAMERA_FAR_FLIPPED : CAMERA_FAR_DEFAULT;
-    if (camera.far !== desiredFar) {
-      camera.far = desiredFar;
-      camera.updateProjectionMatrix();
-    }
-
-    camera.up.set(0, viewFlippedVertically ? -1 : 1, 0);
-    lookTarget.copy(camera.position).addScaledVector(lookDirection, LOOK_DISTANCE);
-    camera.lookAt(lookTarget);
 
     const feed = {
       video: videoFeed?.video,
@@ -248,6 +342,85 @@ export function createSceneController(
       cameraFrameDeep.update(elapsed, feed);
     }
 
+    if (!fifthFrameStarted && deepFrameStarted && cameraFrameDeep.isFacePopulated()) {
+      fifthFrameStarted = true;
+    }
+    if (fifthFrameStarted) {
+      cameraFrameFifth.root.visible = true;
+      cameraFrameFifth.update(elapsed, feed);
+    }
+
+    if (!sixthFrameStarted && fifthFrameStarted && cameraFrameFifth.isFacePopulated()) {
+      sixthFrameStarted = true;
+    }
+    if (sixthFrameStarted) {
+      cameraFrameSixth.root.visible = true;
+      cameraFrameSixth.update(elapsed, feed);
+    }
+
+    if (!seventhFrameStarted && sixthFrameStarted && cameraFrameSixth.isFacePopulated()) {
+      seventhFrameStarted = true;
+    }
+    if (seventhFrameStarted) {
+      cameraFrameSeventh.root.visible = true;
+      cameraFrameSeventh.update(elapsed, feed);
+    }
+
+    if (!eighthFrameStarted && seventhFrameStarted && cameraFrameSeventh.isFacePopulated()) {
+      eighthFrameStarted = true;
+    }
+    if (eighthFrameStarted) {
+      cameraFrameEighth.root.visible = true;
+      cameraFrameEighth.update(elapsed, feed);
+    }
+
+    if (!ninthFrameStarted && eighthFrameStarted && cameraFrameEighth.isFacePopulated()) {
+      ninthFrameStarted = true;
+    }
+    if (ninthFrameStarted) {
+      cameraFrameNinth.root.visible = true;
+      cameraFrameNinth.update(elapsed, feed);
+    }
+
+    if (ninthFrameStarted && cameraFrameNinth.isFacePopulated()) {
+      ninthFlipFromInnerFaceLatched = true;
+    }
+
+    const viewFlippedVertically =
+      liveExperienceElapsedSec >= EXPERIENCE_VIEW_FLIP_AFTER_SEC || ninthFlipFromInnerFaceLatched;
+
+    if (viewFlippedVertically && corridorFlipStartedAtLiveSec === null) {
+      corridorFlipStartedAtLiveSec = liveExperienceElapsedSec;
+    }
+
+    const pitchBase = MathUtils.clamp(BASE_PITCH - offset.y * 0.16, -0.36, 0.36);
+    const pitch = pitchBase + (viewFlippedVertically ? Math.PI : 0);
+
+    lookDirection.set(
+      Math.sin(yaw) * Math.cos(pitch),
+      Math.sin(pitch),
+      -Math.cos(yaw) * Math.cos(pitch),
+    );
+
+    const postFlipElapsed =
+      viewFlippedVertically && corridorFlipStartedAtLiveSec !== null
+        ? Math.max(0, liveExperienceElapsedSec - corridorFlipStartedAtLiveSec)
+        : 0;
+    const descentElapsed = Math.max(0, postFlipElapsed - POST_FLIGHT_DESCENT_HOLD_SEC);
+    const dropY = Math.min(descentElapsed * POST_FLIGHT_DESCENT_SPEED, POST_FLIGHT_DESCENT_MAX_Y);
+    const cameraY = CAMERA_BASE_POSITION.y - dropY;
+    camera.position.set(CAMERA_BASE_POSITION.x, cameraY, currentCameraZ);
+
+    const desiredFar = viewFlippedVertically ? CAMERA_FAR_FLIPPED : CAMERA_FAR_DEFAULT;
+    if (camera.far !== desiredFar) {
+      camera.far = desiredFar;
+      camera.updateProjectionMatrix();
+    }
+
+    camera.up.set(0, viewFlippedVertically ? -1 : 1, 0);
+    lookTarget.copy(camera.position).addScaledVector(lookDirection, LOOK_DISTANCE);
+    camera.lookAt(lookTarget);
+
     renderer.render(scene, camera);
   }
 
@@ -264,9 +437,21 @@ export function createSceneController(
     rightFrameStarted = false;
     backFrameStarted = false;
     deepFrameStarted = false;
+    fifthFrameStarted = false;
+    sixthFrameStarted = false;
+    seventhFrameStarted = false;
+    eighthFrameStarted = false;
+    ninthFrameStarted = false;
+    ninthFlipFromInnerFaceLatched = false;
+    corridorFlipStartedAtLiveSec = null;
     cameraFrameRight.root.visible = false;
     cameraFrameBack.root.visible = false;
     cameraFrameDeep.root.visible = false;
+    cameraFrameFifth.root.visible = false;
+    cameraFrameSixth.root.visible = false;
+    cameraFrameSeventh.root.visible = false;
+    cameraFrameEighth.root.visible = false;
+    cameraFrameNinth.root.visible = false;
   }
 
   function dispose(): void {
@@ -275,6 +460,11 @@ export function createSceneController(
     cameraFrameBack.dispose();
     cameraFrameRight.dispose();
     cameraFrameDeep.dispose();
+    cameraFrameFifth.dispose();
+    cameraFrameSixth.dispose();
+    cameraFrameSeventh.dispose();
+    cameraFrameEighth.dispose();
+    cameraFrameNinth.dispose();
     environment.dispose();
     renderer.dispose();
   }

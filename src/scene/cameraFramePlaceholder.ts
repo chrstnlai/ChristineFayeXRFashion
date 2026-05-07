@@ -10,6 +10,7 @@ import {
   MeshBasicMaterial,
   MeshStandardMaterial,
   PlaneGeometry,
+  ShaderMaterial,
   SRGBColorSpace,
   Vector3,
   VideoTexture,
@@ -35,6 +36,11 @@ export type CameraFramePlaceholderOptions = {
   innerShowAfterFill?: number;
   /** Seconds after the webcam first has frames before distance-based inner reveal can begin */
   innerDelaySeconds?: number;
+  /**
+   * When true (with `video`), the inner feed uses a warped lens + chroma look instead of a flat mirror.
+   * Intended for the first frame only so the face reads as “glitched” while other frames stay clean.
+   */
+  distortVideoFeed?: boolean;
 };
 
 export type CameraFrameUpdateContext = {
@@ -68,6 +74,57 @@ const LABEL_WORLD_W = 0.36;
 const LABEL_WORLD_H = (LABEL_WORLD_W * LABEL_CANVAS_H) / LABEL_CANVAS_W;
 const LABEL_RIGHT_MARGIN = 0.012;
 const LABEL_ABOVE_GAP = 0.022;
+
+const DISTORT_SCREEN_VERTEX = `
+varying vec2 vUv;
+void main() {
+  vUv = uv;
+  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+}
+`;
+
+const DISTORT_SCREEN_FRAGMENT = `
+uniform sampler2D map;
+uniform float opacity;
+uniform float uTime;
+varying vec2 vUv;
+
+void main() {
+  vec2 mapUv = vec2(1.0 - vUv.x, vUv.y);
+  vec2 c = mapUv - 0.5;
+  float r2 = dot(c, c);
+  float len = max(length(c), 1e-5);
+  vec2 dir = c / len;
+  float t = uTime * 2.2;
+  vec2 uv = mapUv + c * r2 * 0.34;
+  uv.x += sin(uv.y * 38.0 + t) * 0.0045;
+  uv.y += cos(uv.x * 34.0 + t * 0.73) * 0.0045;
+  float ca = 0.0038;
+  float r = texture2D(map, uv + dir * ca).r;
+  float g = texture2D(map, uv).g;
+  float b = texture2D(map, uv - dir * ca).b;
+  vec3 rgb = vec3(r, g, b);
+  float vign = 1.0 - r2 * 0.5;
+  rgb *= vign;
+  rgb = pow(max(rgb, vec3(0.0)), vec3(0.92));
+  gl_FragColor = vec4(rgb, opacity);
+}
+`;
+
+function createDistortedVideoScreenMaterial(videoTexture: VideoTexture): ShaderMaterial {
+  return new ShaderMaterial({
+    uniforms: {
+      map: { value: videoTexture },
+      opacity: { value: 0 },
+      uTime: { value: 0 },
+    },
+    vertexShader: DISTORT_SCREEN_VERTEX,
+    fragmentShader: DISTORT_SCREEN_FRAGMENT,
+    transparent: true,
+    toneMapped: false,
+    depthWrite: false,
+  });
+}
 
 function createDetectedLabelTexture(): CanvasTexture {
   const canvas = document.createElement("canvas");
@@ -110,20 +167,23 @@ export function createCameraFramePlaceholder(
 
   let videoTexture: VideoTexture | null = null;
 
-  let screenMat: MeshBasicMaterial | MeshStandardMaterial;
+  let screenMat: MeshBasicMaterial | MeshStandardMaterial | ShaderMaterial;
   if (options.video) {
     videoTexture = new VideoTexture(options.video);
     videoTexture.colorSpace = SRGBColorSpace;
     videoTexture.wrapS = videoTexture.wrapT = ClampToEdgeWrapping;
     videoTexture.repeat.set(-1, 1);
     videoTexture.offset.set(1, 0);
-    screenMat = new MeshBasicMaterial({
-      map: videoTexture,
-      toneMapped: false,
-      transparent: true,
-      opacity: 0,
-      depthWrite: false,
-    });
+    screenMat =
+      options.distortVideoFeed === true
+        ? createDistortedVideoScreenMaterial(videoTexture)
+        : new MeshBasicMaterial({
+            map: videoTexture,
+            toneMapped: false,
+            transparent: true,
+            opacity: 0,
+            depthWrite: false,
+          });
   } else {
     screenMat = new MeshStandardMaterial({
       color: new Color("#141a24"),
@@ -217,7 +277,11 @@ export function createCameraFramePlaceholder(
 
     if (innerFill <= innerShowAfterFill) {
       screenMesh.visible = false;
-      screenMat.opacity = 0;
+      if (screenMat instanceof ShaderMaterial) {
+        screenMat.uniforms.opacity.value = 0;
+      } else {
+        screenMat.opacity = 0;
+      }
     } else {
       screenMesh.visible = true;
       const innerLin = MathUtils.clamp(
@@ -225,7 +289,13 @@ export function createCameraFramePlaceholder(
         0,
         1,
       );
-      screenMat.opacity = innerLin * innerLin * (3 - 2 * innerLin);
+      const o = innerLin * innerLin * (3 - 2 * innerLin);
+      if (screenMat instanceof ShaderMaterial) {
+        screenMat.uniforms.opacity.value = o;
+        screenMat.uniforms.uTime.value = elapsed;
+      } else {
+        screenMat.opacity = o;
+      }
     }
 
     let flashOpacity = 1;
