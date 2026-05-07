@@ -121,7 +121,7 @@ const POST_FLIGHT_DESCENT_MAX_Y = 4;
 /** After flip + vertical descent begins, glide +Z (opposite of the opening −Z run) up to this cap. */
 const POST_FLIP_RETURN_GLIDE_END_Z = CAMERA_BASE_POSITION.z + 5.5;
 /** After this many seconds in the +Z return glide, add π yaw and glide −Z again until `JOURNEY_END_Z`. */
-const POST_FLIP_RETURN_THIRD_PHASE_AFTER_SEC = 20.5;
+const POST_FLIP_RETURN_THIRD_PHASE_AFTER_SEC = 20;
 const CAMERA_FAR_DEFAULT = 140;
 /** Slightly wider far clip after the flip so the space still draws while shifted. */
 const CAMERA_FAR_FLIPPED = 280;
